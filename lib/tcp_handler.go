@@ -6,9 +6,14 @@ import (
 	"strings"
 )
 
+// SimpleTcpHandler is a TCP implementation of the broker
+//
+// This is currently an empty struct,
+// but when other implementations of the broker come up, this will implement an interface.
 type SimpleTcpHandler struct {
 }
 
+// Handle handles a single TCP connection
 func (s *SimpleTcpHandler) Handle(conn net.Conn, ctx *ServerContext) ([]byte, bool, error) {
 	data, err := bufio.NewReader(conn).ReadString('\n')
 	if err != nil {

@@ -12,6 +12,10 @@ import (
 	"time"
 )
 
+// ParseConfig parses a file path and returns a config
+//
+// If the file is remote, it is downloaded via HTTP (proxy settings are respected)
+// If file is local, is it opened in readonly mode.
 func ParseConfig(configFilePath string) (*Config, error) {
 	fileBytes, err := fetchFileBytes(configFilePath)
 	if err != nil {

@@ -9,11 +9,15 @@ import (
 	"time"
 )
 
+// ServerContext stores the state of the cluster node
 type ServerContext struct {
 	connectedClientsMap map[string]*ConnectedClient
 	mu                  *sync.RWMutex
 }
 
+// NewServerContext creates a new server context.
+//
+// This should only be called once per cluster node.
 func NewServerContext() *ServerContext {
 	return &ServerContext{
 		mu:                  &sync.RWMutex{},
@@ -21,6 +25,10 @@ func NewServerContext() *ServerContext {
 	}
 }
 
+// AddSubscribingClient submits a new entry for client subscription
+//
+// If the ConnectedClient already exists, and there is a new topic being subscribed to,
+// only the topic subscription is added.
 func (ctx *ServerContext) AddSubscribingClient(conn net.Conn, clientID string, clientGroup string, topic string) error {
 	clientExists, clientErr := ctx.checkForClient(conn, clientID)
 	if clientErr != nil {
@@ -47,6 +55,10 @@ func (ctx *ServerContext) AddSubscribingClient(conn net.Conn, clientID string, c
 	return nil
 }
 
+// Publish publishes a message to a topic
+//
+// This supports client grouping and chooses one of the eligible clients under the group at random.
+// This can later be switched to any weight-based algorithm.
 func (ctx *ServerContext) Publish(topic string, payload string) {
 	var eligibleGroupedClients []*ConnectedClient
 	for _, client := range ctx.connectedClientsMap {
@@ -77,6 +89,7 @@ func (ctx *ServerContext) Publish(topic string, payload string) {
 	}
 }
 
+// RemoveClient removes a ConnectedClient from the ServerContext
 func (ctx *ServerContext) RemoveClient(conn net.Conn) {
 	ctx.mu.Lock()
 	defer ctx.mu.Unlock()
@@ -117,12 +130,12 @@ func (ctx *ServerContext) checkForClient(conn net.Conn, clientID string) (client
 
 		if clientID == oldClientID && newAddr == oldAddr {
 			return true, nil
-		} else {
-			if clientID == oldClientID && newAddr != oldAddr {
-				return true, errors.New("clientID was used elsewhere")
-			} else if clientID != oldClientID && newAddr == oldAddr {
-				return true, errors.New("this connection was previously bound to another clientID")
-			}
+		}
+
+		if clientID == oldClientID && newAddr != oldAddr {
+			return true, errors.New("clientID was used elsewhere")
+		} else if clientID != oldClientID && newAddr == oldAddr {
+			return true, errors.New("this connection was previously bound to another clientID")
 		}
 	}
 	return false, nil
@@ -145,6 +158,7 @@ func checkForTopicInArray(topic string, topics []string) bool {
 	return false
 }
 
+// ConnectedClient stores the information about a currently connected client
 type ConnectedClient struct {
 	Connection  net.Conn
 	Topics      []string

@@ -8,12 +8,14 @@ import (
 
 var upgrader = websocket.Upgrader{}
 
+// PublishHttp handles publish calls for ws:// and wss:// connections
 func PublishHttp(ctx *ServerContext) func(http.ResponseWriter, *http.Request) {
 	return func(writer http.ResponseWriter, request *http.Request) {
 
 	}
 }
 
+// SubscribeHttp handles subscribe calls for ws:// and wss:// connections
 func SubscribeHttp(ctx *ServerContext) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		c, err := upgrader.Upgrade(w, r, nil)

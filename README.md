@@ -1,6 +1,8 @@
 # Hermes
 Hermes is a tiny message broker written in Go.
 
+[![Go Report Card](https://goreportcard.com/badge/github.com/c16a/hermes)](https://goreportcard.com/report/github.com/c16a/hermes)
+
 The goals of the project are as below
 - Easy to compile, and run
 - Tiny footprint
