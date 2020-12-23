@@ -10,13 +10,14 @@ import (
 )
 
 type ServerContext struct {
-	connectedClients []*ConnectedClient
-	mu               *sync.RWMutex
+	connectedClientsMap map[string]*ConnectedClient
+	mu                  *sync.RWMutex
 }
 
 func NewServerContext() *ServerContext {
 	return &ServerContext{
-		mu: &sync.RWMutex{},
+		mu:                  &sync.RWMutex{},
+		connectedClientsMap: make(map[string]*ConnectedClient, 0),
 	}
 }
 
@@ -40,7 +41,7 @@ func (ctx *ServerContext) AddSubscribingClient(conn net.Conn, clientID string, c
 			ClientGroup: clientGroup,
 		}
 		ctx.mu.Lock()
-		ctx.connectedClients = append(ctx.connectedClients, newClient)
+		ctx.connectedClientsMap[clientID] = newClient
 		ctx.mu.Unlock()
 	}
 	return nil
@@ -48,7 +49,7 @@ func (ctx *ServerContext) AddSubscribingClient(conn net.Conn, clientID string, c
 
 func (ctx *ServerContext) Publish(topic string, payload string) {
 	var eligibleGroupedClients []*ConnectedClient
-	for _, client := range ctx.connectedClients {
+	for _, client := range ctx.connectedClientsMap {
 		if checkForTopicInArray(topic, client.Topics) {
 			if client.ClientGroup == "" {
 				_, err := client.Connection.Write([]byte(payload + "\n"))
@@ -80,16 +81,15 @@ func (ctx *ServerContext) RemoveClient(conn net.Conn) {
 	ctx.mu.Lock()
 	defer ctx.mu.Unlock()
 
-	var indexToRemove int
-	for index, client := range ctx.connectedClients {
+	var clientIdToRemove string
+	for clientID, client := range ctx.connectedClientsMap {
 		if client.Connection.RemoteAddr().String() == conn.RemoteAddr().String() {
-			indexToRemove = index
+			clientIdToRemove = clientID
 		}
 	}
 
 	// Removing indexToRemove and not caring about the order
-	ctx.connectedClients[indexToRemove] = ctx.connectedClients[len(ctx.connectedClients)-1]
-	ctx.connectedClients = ctx.connectedClients[:len(ctx.connectedClients)-1]
+	delete(ctx.connectedClientsMap, clientIdToRemove)
 }
 
 func convertToMapOfClients(clients []*ConnectedClient) map[string][]*ConnectedClient {
@@ -112,9 +112,8 @@ func (ctx *ServerContext) checkForClient(conn net.Conn, clientID string) (client
 	defer ctx.mu.RUnlock()
 
 	newAddr := conn.RemoteAddr().String()
-	for _, existingClient := range ctx.connectedClients {
+	for oldClientID, existingClient := range ctx.connectedClientsMap {
 		oldAddr := existingClient.Connection.RemoteAddr().String()
-		oldClientID := existingClient.ClientID
 
 		if clientID == oldClientID && newAddr == oldAddr {
 			return true, nil
@@ -130,8 +129,8 @@ func (ctx *ServerContext) checkForClient(conn net.Conn, clientID string) (client
 }
 
 func (ctx *ServerContext) subscribe(clientID string, topic string) {
-	for _, client := range ctx.connectedClients {
-		if clientID == client.ClientID {
+	for id, client := range ctx.connectedClientsMap {
+		if clientID == id {
 			client.Topics = append(client.Topics, topic)
 		}
 	}
