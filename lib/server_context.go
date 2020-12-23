@@ -11,19 +11,16 @@ import (
 
 type ServerContext struct {
 	connectedClients []*ConnectedClient
-	mu               *sync.Mutex
+	mu               *sync.RWMutex
 }
 
 func NewServerContext() *ServerContext {
 	return &ServerContext{
-		mu: &sync.Mutex{},
+		mu: &sync.RWMutex{},
 	}
 }
 
 func (ctx *ServerContext) AddSubscribingClient(conn net.Conn, clientID string, clientGroup string, topic string) error {
-	ctx.mu.Lock()
-	defer ctx.mu.Unlock()
-
 	clientExists, clientErr := ctx.checkForClient(conn, clientID)
 	if clientErr != nil {
 		fmt.Println(clientErr)
@@ -42,7 +39,9 @@ func (ctx *ServerContext) AddSubscribingClient(conn net.Conn, clientID string, c
 			ClientID:    clientID,
 			ClientGroup: clientGroup,
 		}
+		ctx.mu.Lock()
 		ctx.connectedClients = append(ctx.connectedClients, newClient)
+		ctx.mu.Unlock()
 	}
 	return nil
 }
@@ -109,6 +108,9 @@ func convertToMapOfClients(clients []*ConnectedClient) map[string][]*ConnectedCl
 }
 
 func (ctx *ServerContext) checkForClient(conn net.Conn, clientID string) (clientExists bool, clientIdMismatchErr error) {
+	ctx.mu.RLock()
+	defer ctx.mu.RUnlock()
+
 	newAddr := conn.RemoteAddr().String()
 	for _, existingClient := range ctx.connectedClients {
 		oldAddr := existingClient.Connection.RemoteAddr().String()
