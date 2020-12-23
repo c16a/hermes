@@ -5,18 +5,25 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
+	"sync"
 	"time"
 )
 
 type ServerContext struct {
 	connectedClients []*ConnectedClient
+	mu               *sync.Mutex
 }
 
 func NewServerContext() *ServerContext {
-	return &ServerContext{}
+	return &ServerContext{
+		mu: &sync.Mutex{},
+	}
 }
 
 func (ctx *ServerContext) AddSubscribingClient(conn net.Conn, clientID string, clientGroup string, topic string) error {
+	ctx.mu.Lock()
+	defer ctx.mu.Unlock()
+
 	clientExists, clientErr := ctx.checkForClient(conn, clientID)
 	if clientErr != nil {
 		fmt.Println(clientErr)
@@ -71,6 +78,9 @@ func (ctx *ServerContext) Publish(topic string, payload string) {
 }
 
 func (ctx *ServerContext) RemoveClient(conn net.Conn) {
+	ctx.mu.Lock()
+	defer ctx.mu.Unlock()
+
 	var indexToRemove int
 	for index, client := range ctx.connectedClients {
 		if client.Connection.RemoteAddr().String() == conn.RemoteAddr().String() {
