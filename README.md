@@ -27,7 +27,7 @@ SUB client-1 group-1 my-topic
 OK
 ```
 
-On retrospection, it now feels sensible to make this [MQTT-compatible](https://docs.oasis-open.org/mqtt/mqtt/v5.0/mqtt-v5.0.pdf).
+On retrospection, it now feels sensible to make this [MQTT-compatible](https://docs.oasis-open.org/mqtt/mqtt/v5.0/mqtt-v5.0.pdf). It is also dawning on me that the MQTT v5.0 spec is 137 pages long and I'm too lazy to read through it. Parking it for the new year.
 
 ### Supports client grouping
 Multiple clients can subscribe, acting as a single unit, 
