@@ -1,6 +1,10 @@
 # Hermes
 Hermes is a tiny message broker written in Go.
 
+[![Go Workflow Status](https://github.com/c16a/hermes/workflows/Go/badge.svg)](https://github.com/c16a/hermes/workflows/Go/badge.svg)
+
+[![CodeQL Workflow Status](https://github.com/c16a/hermes/workflows/CodeQL/badge.svg)](https://github.com/c16a/hermes/workflows/CodeQL/badge.svg)
+
 [![Go Report Card](https://goreportcard.com/badge/github.com/c16a/hermes)](https://goreportcard.com/report/github.com/c16a/hermes)
 
 The goals of the project are as below
