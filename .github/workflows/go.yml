@@ -13,35 +13,41 @@ jobs:
     runs-on: ubuntu-latest
     steps:
 
-    - name: Set up Go 1.x
-      uses: actions/setup-go@v2
-      with:
-        go-version: ^1.15
+      - name: Set up Go 1.x
+        uses: actions/setup-go@v2
+        with:
+          go-version: ^1.15
 
-    - name: Check out code into the Go module directory
-      uses: actions/checkout@v2
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v2
 
-    - name: Get dependencies
-      run: |
-        go mod tidy
+      - name: Get dependencies
+        run: |
+          go mod tidy
 
-    - name: Build Linux x64
-      run: GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o hermes_linux_amd64 github.com/c16a/hermes/app
+      - name: Build Linux x64
+        run: GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o build/hermes_linux_amd64 github.com/c16a/hermes/app
 
-    - name: Build Linux ARM 64-bit
-      run: GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o hermes_linux_arm64 github.com/c16a/hermes/app
+      - name: Build Linux ARM 64-bit
+        run: GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o build/hermes_linux_arm64 github.com/c16a/hermes/app
 
-    - name: Build Linux OpenPOWER 64-bit
-      run: GOOS=linux GOARCH=ppc64le go build -ldflags="-s -w" -o hermes_linux_ppc64le github.com/c16a/hermes/app
+      - name: Build Linux OpenPOWER 64-bit
+        run: GOOS=linux GOARCH=ppc64le go build -ldflags="-s -w" -o build/hermes_linux_ppc64le github.com/c16a/hermes/app
 
-    - name: Build Linux RISC-V 64-bit
-      run: GOOS=linux GOARCH=riscv64 go build -ldflags="-s -w" -o hermes_linux_riscv64 github.com/c16a/hermes/app
+      - name: Build Linux RISC-V 64-bit
+        run: GOOS=linux GOARCH=riscv64 go build -ldflags="-s -w" -o build/hermes_linux_riscv64 github.com/c16a/hermes/app
 
-    - name: Build Windows x64
-      run: GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o hermes_windows_amd64.exe github.com/c16a/hermes/app
+      - name: Build Windows x64
+        run: GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o build/hermes_windows_amd64.exe github.com/c16a/hermes/app
 
-    - name: Build macOS Intel x64
-      run: GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o hermes_mac_amd64 github.com/c16a/hermes/app
+      - name: Build macOS Intel x64
+        run: GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o build/hermes_mac_amd64 github.com/c16a/hermes/app
 
-    - name: Build AIX 64-bit
-      run: GOOS=aix GOARCH=ppc64 go build -ldflags="-s -w" -o hermes_aix_ppc64 github.com/c16a/hermes/app
+      - name: Build AIX 64-bit
+        run: GOOS=aix GOARCH=ppc64 go build -ldflags="-s -w" -o build/hermes_aix_ppc64 github.com/c16a/hermes/app
+
+      - name: Store artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          path: build/**
+
