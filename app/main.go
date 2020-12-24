@@ -3,11 +3,12 @@ package main
 import (
 	"crypto/tls"
 	"fmt"
-	"github.com/c16a/hermes/config"
-	"github.com/c16a/hermes/lib"
 	"log"
 	"net"
 	"net/http"
+
+	"github.com/c16a/hermes/config"
+	"github.com/c16a/hermes/lib"
 )
 
 func main() {
@@ -66,7 +67,7 @@ func handleTcpConnection(conn net.Conn, ctx *lib.ServerContext) {
 
 	handler := &lib.SimpleTcpHandler{}
 
-	for true {
+	for {
 		response, quit, err := handler.Handle(conn, ctx)
 		if err != nil {
 			conn.Write(response)
