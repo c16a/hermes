@@ -3,7 +3,6 @@ package lib
 import (
 	"fmt"
 	"github.com/eclipse/paho.golang/packets"
-	"github.com/eclipse/paho.golang/paho"
 	"net"
 	"sync"
 )
@@ -24,46 +23,104 @@ func NewServerContext() *ServerContext {
 	}
 }
 
-func (ctx *ServerContext) AddClient(conn net.Conn, connect *packets.Connect) byte {
+func (ctx *ServerContext) AddClient(conn net.Conn, connect *packets.Connect) (code byte, sessionExists bool) {
 	clientExists := ctx.checkForClient(connect.ClientID)
-
+	clientRequestForFreshSession := connect.CleanStart
 	if clientExists {
-		return 130
+		if clientRequestForFreshSession {
+			// If client asks for fresh session, delete existing ones
+			delete(ctx.connectedClientsMap, connect.ClientID)
+			ctx.doAddClient(conn, connect)
+		} else {
+			ctx.doUpdateClient(connect.ClientID, conn)
+		}
+	} else {
+		ctx.doAddClient(conn, connect)
 	}
-	// Add new client
-	fmt.Println("Adding new client")
+	return 0, clientExists && !clientRequestForFreshSession
+}
+
+func (ctx *ServerContext) doAddClient(conn net.Conn, connect *packets.Connect) {
 	newClient := &ConnectedClient{
-		Connection: conn,
-		ClientID:   connect.ClientID,
+		Connection:   conn,
+		ClientID:     connect.ClientID,
+		IsClean:      connect.CleanStart,
+		IsConnected:  true,
+		Subscription: make(map[string]packets.SubOptions, 0),
 	}
 	ctx.mu.Lock()
 	ctx.connectedClientsMap[connect.ClientID] = newClient
 	ctx.mu.Unlock()
-	return 0
 }
 
-// Publish publishes a message to a topic
-//
-// This supports client grouping and chooses one of the eligible clients under the group at random.
-// This can later be switched to any weight-based algorithm.
-func (ctx *ServerContext) Publish(publish *packets.Publish) {
-
+func (ctx *ServerContext) doUpdateClient(clientID string, conn net.Conn) {
+	ctx.connectedClientsMap[clientID].Connection = conn
 }
 
-// RemoveClient removes a ConnectedClient from the ServerContext
-func (ctx *ServerContext) RemoveClient(conn net.Conn) {
-	ctx.mu.Lock()
-	defer ctx.mu.Unlock()
-
+func (ctx *ServerContext) Disconnect(conn net.Conn, disconnect *packets.Disconnect) {
 	var clientIdToRemove string
+	shouldDelete := false
 	for clientID, client := range ctx.connectedClientsMap {
-		if client.Connection.RemoteAddr().String() == conn.RemoteAddr().String() {
+		if client.Connection == conn {
 			clientIdToRemove = clientID
+			if client.IsClean {
+				shouldDelete = true
+			}
 		}
 	}
 
-	// Removing indexToRemove and not caring about the order
-	delete(ctx.connectedClientsMap, clientIdToRemove)
+	if shouldDelete {
+		delete(ctx.connectedClientsMap, clientIdToRemove)
+	} else {
+		ctx.connectedClientsMap[clientIdToRemove].IsConnected = false
+	}
+}
+
+// Publish publishes a message to a topic
+func (ctx *ServerContext) Publish(publish *packets.Publish) {
+	for _, client := range ctx.connectedClientsMap {
+		topicToTarget := publish.Topic
+		if _, ok := client.Subscription[topicToTarget]; ok {
+			if !client.IsConnected {
+				continue
+			}
+			_, err := publish.WriteTo(client.Connection)
+			if err != nil {
+				fmt.Println(err)
+			}
+		}
+	}
+}
+
+func (ctx *ServerContext) Subscribe(conn net.Conn, subscribe *packets.Subscribe) {
+	for _, client := range ctx.connectedClientsMap {
+		if conn == client.Connection {
+			for topic, options := range subscribe.Subscriptions {
+				client.Subscription[topic] = options
+			}
+		}
+	}
+}
+
+func (ctx *ServerContext) checkForClient(clientID string) bool {
+	ctx.mu.RLock()
+	defer ctx.mu.RUnlock()
+
+	for oldClientID := range ctx.connectedClientsMap {
+		if clientID == oldClientID {
+			return true
+		}
+	}
+	return false
+}
+
+func checkForTopicInArray(topic string, topics []string) bool {
+	for _, t := range topics {
+		if topic == t {
+			return true
+		}
+	}
+	return false
 }
 
 func convertToMapOfClients(clients []*ConnectedClient) map[string][]*ConnectedClient {
@@ -81,41 +138,12 @@ func convertToMapOfClients(clients []*ConnectedClient) map[string][]*ConnectedCl
 	return clientMap
 }
 
-func (ctx *ServerContext) checkForClient(clientID string) bool {
-	ctx.mu.RLock()
-	defer ctx.mu.RUnlock()
-
-	for oldClientID := range ctx.connectedClientsMap {
-		if clientID == oldClientID {
-			return true
-		}
-	}
-	return false
-}
-
-func (ctx *ServerContext) subscribe(clientID string, topic string) {
-	for id, client := range ctx.connectedClientsMap {
-		if clientID == id {
-			client.Topics = append(client.Topics, topic)
-		}
-	}
-}
-
-func checkForTopicInArray(topic string, topics []string) bool {
-	for _, t := range topics {
-		if topic == t {
-			return true
-		}
-	}
-	return false
-}
-
 // ConnectedClient stores the information about a currently connected client
 type ConnectedClient struct {
 	Connection   net.Conn
-	Topics       []string
 	ClientID     string
 	ClientGroup  string
 	IsConnected  bool
-	Subscription map[string]paho.SubscribeOptions
+	IsClean      bool
+	Subscription map[string]packets.SubOptions
 }

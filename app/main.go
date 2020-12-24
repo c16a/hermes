@@ -62,25 +62,6 @@ func startTcpServer(serverConfig *config.Config, ctx *lib.ServerContext) {
 	}
 }
 
-func handleTcpConnection(conn net.Conn, ctx *lib.ServerContext) {
-	fmt.Printf("Serving %s\n", conn.RemoteAddr().String())
-
-	handler := &lib.SimpleTcpHandler{}
-
-	for {
-		response, quit, err := handler.Handle(conn, ctx)
-		if err != nil {
-			conn.Write(response)
-			continue
-		}
-		if quit {
-			conn.Close()
-			break
-		}
-		conn.Write(response)
-	}
-}
-
 func handleMqttConnection(conn net.Conn, ctx *lib.ServerContext) {
 	handler := &lib.MqttHandler{}
 

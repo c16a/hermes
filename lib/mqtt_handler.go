@@ -29,6 +29,7 @@ func (handler *MqttHandler) Handle(conn net.Conn, ctx *ServerContext) {
 	case packets.SUBSCRIBE:
 		packetHandler = handleSubscribe
 	case packets.DISCONNECT:
+		packetHandler = handleDisconnect
 	default:
 		return
 	}
@@ -45,17 +46,18 @@ func handleConnect(conn net.Conn, controlPacket *packets.ControlPacket, ctx *Ser
 		connectPacket.ClientID = uuid.NewV4().String()
 	}
 	if ok {
-		fmt.Printf("Auth info: %s, %s, %s\n", connectPacket.Username, connectPacket.Password, connectPacket.ClientID)
 	} else {
 		return
 	}
+
+	reasonCode, sessionExists := ctx.AddClient(conn, connectPacket)
 	connAckPacket := packets.Connack{
 		Properties: &packets.Properties{
 			AssignedClientID: connectPacket.ClientID,
 			MaximumQOS:       paho.Byte(2),
 		},
-		ReasonCode:     ctx.AddClient(conn, connectPacket),
-		SessionPresent: true,
+		ReasonCode:     reasonCode,
+		SessionPresent: sessionExists,
 	}
 
 	_, err := connAckPacket.WriteTo(conn)
@@ -64,12 +66,19 @@ func handleConnect(conn net.Conn, controlPacket *packets.ControlPacket, ctx *Ser
 	}
 }
 
+func handleDisconnect(conn net.Conn, controlPacket *packets.ControlPacket, ctx *ServerContext) {
+	disconnectPacket, ok := controlPacket.Content.(*packets.Disconnect)
+	if !ok {
+		return
+	}
+
+	ctx.Disconnect(conn, disconnectPacket)
+}
+
 func handlePublish(conn net.Conn, controlPacket *packets.ControlPacket, ctx *ServerContext) {
 	publishPacket, ok := controlPacket.Content.(*packets.Publish)
 	if !ok {
 		return
-	} else {
-		fmt.Printf("Received publish: %s, qos: %v\n", publishPacket.Topic, publishPacket.QoS)
 	}
 
 	switch publishPacket.QoS {
@@ -105,13 +114,11 @@ func handleSubscribe(conn net.Conn, controlPacket *packets.ControlPacket, ctx *S
 		return
 	}
 
-	for topic, subOpts := range subscribePacket.Subscriptions {
-		fmt.Printf("Subscribing to: %s, qos: %v\n", topic, subOpts.QoS)
-	}
+	ctx.Subscribe(conn, subscribePacket)
 
 	subAck := packets.Suback{
 		PacketID: subscribePacket.PacketID,
-		Reasons: []byte{packets.SubackGrantedQoS0},
+		Reasons:  []byte{packets.SubackGrantedQoS0},
 	}
 	_, err := subAck.WriteTo(conn)
 	if err != nil {
