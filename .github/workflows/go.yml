@@ -44,4 +44,4 @@ jobs:
       run: GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o hermes_mac_amd64 github.com/c16a/hermes/app
 
     - name: Build AIX 64-bit
-      run: GOOS=aix GOARCH=ppc64le go build -ldflags="-s -w" -o hermes_aix_ppc64 github.com/c16a/hermes/app
+      run: GOOS=aix GOARCH=ppc64 go build -ldflags="-s -w" -o hermes_aix_ppc64 github.com/c16a/hermes/app
