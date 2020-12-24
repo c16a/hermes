@@ -1,5 +1,5 @@
 # Hermes
-Hermes is a tiny message broker written in Go.
+Hermes is a tiny MQTT compatible broker written in Go.
 
 [![Go Workflow Status](https://github.com/c16a/hermes/workflows/Go/badge.svg)](https://github.com/c16a/hermes/workflows/Go/badge.svg)
 
@@ -19,25 +19,21 @@ This is a project which arose out of my boredom during COVID-19,
 and general issues whilst working with other production ready brokers 
 such as ActiveMQ, Solace, NATS etc.
 
-### Simple text-based protocol
-This was inspired by NATS, which is by far my favorite message broker.
+- [x] CONNECT
+- [x] PUBLISH, PUBACK
+- [x] SUBSCRIBE, SUBACK
+- [x] DISCONNECT
+- [x] Persistent sessions
+- [ ] QoS 2 support  
+- [ ] Offline messages
+- [ ] MQTT over WebSocket
+- [ ] Clustering
 
-```shell
-$ telnet localhost 4000
-Trying ::1...
-Connected to localhost.
-Escape character is '^]'.
-PUB topic-1 Hello
-OK
-SUB client-1 group-1 my-topic
-OK
-```
-
-Support for MQTT v5 is currently being worked on [feature/mqtt](https://github.com/c16a/hermes/tree/feature/mqtt). The custom protocol will soon be sunset in favor of MQTT.
-
-### Supports client grouping
-Multiple clients can subscribe, acting as a single unit, 
-and the broker can randomly push the payload to just one of them.
+## Usage
+Any compatible MQTT client library can be used to interact with the broker
+- Java ([eclipse/paho.mqtt.java](https://github.com/eclipse/paho.mqtt.java))
+- Go ([eclipse/paho.golang](https://github.com/eclipse/paho.golang))
+- Other clients can be found [here](https://github.com/eclipse?q=paho&type=&language=)
 
 ## Planned features
 The following are some features from the top of my head which I will work on
