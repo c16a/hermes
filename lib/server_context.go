@@ -1,12 +1,10 @@
 package lib
 
 import (
-	"errors"
 	"fmt"
-	"math/rand"
+	"github.com/eclipse/paho.golang/packets"
 	"net"
 	"sync"
-	"time"
 )
 
 // ServerContext stores the state of the cluster node
@@ -25,84 +23,104 @@ func NewServerContext() *ServerContext {
 	}
 }
 
-// AddSubscribingClient submits a new entry for client subscription
-//
-// If the ConnectedClient already exists, and there is a new topic being subscribed to,
-// only the topic subscription is added.
-func (ctx *ServerContext) AddSubscribingClient(conn net.Conn, clientID string, clientGroup string, topic string) error {
-	clientExists, clientErr := ctx.checkForClient(conn, clientID)
-	if clientErr != nil {
-		fmt.Println(clientErr)
-		return clientErr
-	}
+func (ctx *ServerContext) AddClient(conn net.Conn, connect *packets.Connect) (code byte, sessionExists bool) {
+	clientExists := ctx.checkForClient(connect.ClientID)
+	clientRequestForFreshSession := connect.CleanStart
 	if clientExists {
-		// Just subscribe to the new topic
-		fmt.Println("Existing client called SUB")
-		ctx.subscribe(clientID, topic)
-	} else {
-		// Add new client
-		fmt.Println("Adding new client")
-		newClient := &ConnectedClient{
-			Connection:  conn,
-			Topics:      []string{topic},
-			ClientID:    clientID,
-			ClientGroup: clientGroup,
+		if clientRequestForFreshSession {
+			// If client asks for fresh session, delete existing ones
+			delete(ctx.connectedClientsMap, connect.ClientID)
+			ctx.doAddClient(conn, connect)
+		} else {
+			ctx.doUpdateClient(connect.ClientID, conn)
 		}
-		ctx.mu.Lock()
-		ctx.connectedClientsMap[clientID] = newClient
-		ctx.mu.Unlock()
+	} else {
+		ctx.doAddClient(conn, connect)
 	}
-	return nil
+	return 0, clientExists && !clientRequestForFreshSession
 }
 
-// Publish publishes a message to a topic
-//
-// This supports client grouping and chooses one of the eligible clients under the group at random.
-// This can later be switched to any weight-based algorithm.
-func (ctx *ServerContext) Publish(topic string, payload string) {
-	var eligibleGroupedClients []*ConnectedClient
-	for _, client := range ctx.connectedClientsMap {
-		if checkForTopicInArray(topic, client.Topics) {
-			if client.ClientGroup == "" {
-				_, err := client.Connection.Write([]byte(payload + "\n"))
-				if err != nil {
-					fmt.Println(err)
-				}
-			} else {
-				eligibleGroupedClients = append(eligibleGroupedClients, client)
+func (ctx *ServerContext) doAddClient(conn net.Conn, connect *packets.Connect) {
+	newClient := &ConnectedClient{
+		Connection:   conn,
+		ClientID:     connect.ClientID,
+		IsClean:      connect.CleanStart,
+		IsConnected:  true,
+		Subscription: make(map[string]packets.SubOptions, 0),
+	}
+	ctx.mu.Lock()
+	ctx.connectedClientsMap[connect.ClientID] = newClient
+	ctx.mu.Unlock()
+}
+
+func (ctx *ServerContext) doUpdateClient(clientID string, conn net.Conn) {
+	ctx.connectedClientsMap[clientID].Connection = conn
+}
+
+func (ctx *ServerContext) Disconnect(conn net.Conn, disconnect *packets.Disconnect) {
+	var clientIdToRemove string
+	shouldDelete := false
+	for clientID, client := range ctx.connectedClientsMap {
+		if client.Connection == conn {
+			clientIdToRemove = clientID
+			if client.IsClean {
+				shouldDelete = true
 			}
 		}
 	}
 
-	for _, clients := range convertToMapOfClients(eligibleGroupedClients) {
-		var client *ConnectedClient
-		if len(clients) == 1 {
-			client = clients[0]
-		} else {
-			rand.Seed(time.Now().Unix())
-			s := rand.NewSource(time.Now().Unix())
-			r := rand.New(s) // initialize local pseudorandom generator
-			luckyClientIndex := r.Intn(len(clients))
-			client = clients[luckyClientIndex]
-		}
-		_, _ = client.Connection.Write([]byte(payload + "\n"))
+	if shouldDelete {
+		delete(ctx.connectedClientsMap, clientIdToRemove)
+	} else {
+		ctx.connectedClientsMap[clientIdToRemove].IsConnected = false
 	}
 }
 
-// RemoveClient removes a ConnectedClient from the ServerContext
-func (ctx *ServerContext) RemoveClient(conn net.Conn) {
-	ctx.mu.Lock()
-	defer ctx.mu.Unlock()
-
-	var clientIdToRemove string
-	for clientID, client := range ctx.connectedClientsMap {
-		if client.Connection.RemoteAddr().String() == conn.RemoteAddr().String() {
-			clientIdToRemove = clientID
+// Publish publishes a message to a topic
+func (ctx *ServerContext) Publish(publish *packets.Publish) {
+	for _, client := range ctx.connectedClientsMap {
+		topicToTarget := publish.Topic
+		if _, ok := client.Subscription[topicToTarget]; ok {
+			if !client.IsConnected {
+				continue
+			}
+			_, err := publish.WriteTo(client.Connection)
+			if err != nil {
+				fmt.Println(err)
+			}
 		}
 	}
+}
 
-	// Removing indexToRemove and not caring about the order
-	delete(ctx.connectedClientsMap, clientIdToRemove)
+func (ctx *ServerContext) Subscribe(conn net.Conn, subscribe *packets.Subscribe) {
+	for _, client := range ctx.connectedClientsMap {
+		if conn == client.Connection {
+			for topic, options := range subscribe.Subscriptions {
+				client.Subscription[topic] = options
+			}
+		}
+	}
+}
+
+func (ctx *ServerContext) checkForClient(clientID string) bool {
+	ctx.mu.RLock()
+	defer ctx.mu.RUnlock()
+
+	for oldClientID := range ctx.connectedClientsMap {
+		if clientID == oldClientID {
+			return true
+		}
+	}
+	return false
+}
+
+func checkForTopicInArray(topic string, topics []string) bool {
+	for _, t := range topics {
+		if topic == t {
+			return true
+		}
+	}
+	return false
 }
 
 func convertToMapOfClients(clients []*ConnectedClient) map[string][]*ConnectedClient {
@@ -120,49 +138,12 @@ func convertToMapOfClients(clients []*ConnectedClient) map[string][]*ConnectedCl
 	return clientMap
 }
 
-func (ctx *ServerContext) checkForClient(conn net.Conn, clientID string) (clientExists bool, clientIdMismatchErr error) {
-	ctx.mu.RLock()
-	defer ctx.mu.RUnlock()
-
-	newAddr := conn.RemoteAddr().String()
-	for oldClientID, existingClient := range ctx.connectedClientsMap {
-		oldAddr := existingClient.Connection.RemoteAddr().String()
-
-		if clientID == oldClientID && newAddr == oldAddr {
-			return true, nil
-		}
-
-		if clientID == oldClientID && newAddr != oldAddr {
-			return true, errors.New("clientID was used elsewhere")
-		} else if clientID != oldClientID && newAddr == oldAddr {
-			return true, errors.New("this connection was previously bound to another clientID")
-		}
-	}
-	return false, nil
-}
-
-func (ctx *ServerContext) subscribe(clientID string, topic string) {
-	for id, client := range ctx.connectedClientsMap {
-		if clientID == id {
-			client.Topics = append(client.Topics, topic)
-		}
-	}
-}
-
-func checkForTopicInArray(topic string, topics []string) bool {
-	for _, t := range topics {
-		if topic == t {
-			return true
-		}
-	}
-	return false
-}
-
 // ConnectedClient stores the information about a currently connected client
 type ConnectedClient struct {
-	Connection  net.Conn
-	Topics      []string
-	ClientID    string
-	ClientGroup string
-	IsActive    bool
+	Connection   net.Conn
+	ClientID     string
+	ClientGroup  string
+	IsConnected  bool
+	IsClean      bool
+	Subscription map[string]packets.SubOptions
 }
