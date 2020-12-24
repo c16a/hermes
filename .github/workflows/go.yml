@@ -28,26 +28,56 @@ jobs:
       - name: Build Linux x64
         run: GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o build/hermes_linux_amd64 github.com/c16a/hermes/app
 
+      - name: Store Linux x64 artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          path: build/hermes_linux_amd64
+
       - name: Build Linux ARM 64-bit
         run: GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o build/hermes_linux_arm64 github.com/c16a/hermes/app
+
+      - name: Store Linux ARM 64-bit artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          path: build/hermes_linux_arm64
 
       - name: Build Linux OpenPOWER 64-bit
         run: GOOS=linux GOARCH=ppc64le go build -ldflags="-s -w" -o build/hermes_linux_ppc64le github.com/c16a/hermes/app
 
+      - name: Store Linux OpenPOWER 64-bit artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          path: hermes_linux_ppc64le
+
       - name: Build Linux RISC-V 64-bit
         run: GOOS=linux GOARCH=riscv64 go build -ldflags="-s -w" -o build/hermes_linux_riscv64 github.com/c16a/hermes/app
+
+      - name: Store Linux RISC-V 64-bit artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          path: build/hermes_linux_riscv64
 
       - name: Build Windows x64
         run: GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o build/hermes_windows_amd64.exe github.com/c16a/hermes/app
 
+      - name: Store Windows x64 artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          path: build/hermes_windows_amd64.exe
+
       - name: Build macOS Intel x64
         run: GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o build/hermes_mac_amd64 github.com/c16a/hermes/app
+
+      - name: Store macOS Intel x64 artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          path: build/hermes_mac_amd64
 
       - name: Build AIX 64-bit
         run: GOOS=aix GOARCH=ppc64 go build -ldflags="-s -w" -o build/hermes_aix_ppc64 github.com/c16a/hermes/app
 
-      - name: Store artifacts
+      - name: Store AIX 64-bit artifacts
         uses: actions/upload-artifact@v2
         with:
-          path: build/**
+          path: build/hermes_aix_ppc64
 
