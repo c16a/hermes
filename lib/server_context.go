@@ -1,12 +1,11 @@
 package lib
 
 import (
-	"errors"
 	"fmt"
-	"math/rand"
+	"github.com/eclipse/paho.golang/packets"
+	"github.com/eclipse/paho.golang/paho"
 	"net"
 	"sync"
-	"time"
 )
 
 // ServerContext stores the state of the cluster node
@@ -25,68 +24,30 @@ func NewServerContext() *ServerContext {
 	}
 }
 
-// AddSubscribingClient submits a new entry for client subscription
-//
-// If the ConnectedClient already exists, and there is a new topic being subscribed to,
-// only the topic subscription is added.
-func (ctx *ServerContext) AddSubscribingClient(conn net.Conn, clientID string, clientGroup string, topic string) error {
-	clientExists, clientErr := ctx.checkForClient(conn, clientID)
-	if clientErr != nil {
-		fmt.Println(clientErr)
-		return clientErr
-	}
+func (ctx *ServerContext) AddClient(conn net.Conn, connect *packets.Connect) byte {
+	clientExists := ctx.checkForClient(connect.ClientID)
+
 	if clientExists {
-		// Just subscribe to the new topic
-		fmt.Println("Existing client called SUB")
-		ctx.subscribe(clientID, topic)
-	} else {
-		// Add new client
-		fmt.Println("Adding new client")
-		newClient := &ConnectedClient{
-			Connection:  conn,
-			Topics:      []string{topic},
-			ClientID:    clientID,
-			ClientGroup: clientGroup,
-		}
-		ctx.mu.Lock()
-		ctx.connectedClientsMap[clientID] = newClient
-		ctx.mu.Unlock()
+		return 130
 	}
-	return nil
+	// Add new client
+	fmt.Println("Adding new client")
+	newClient := &ConnectedClient{
+		Connection: conn,
+		ClientID:   connect.ClientID,
+	}
+	ctx.mu.Lock()
+	ctx.connectedClientsMap[connect.ClientID] = newClient
+	ctx.mu.Unlock()
+	return 0
 }
 
 // Publish publishes a message to a topic
 //
 // This supports client grouping and chooses one of the eligible clients under the group at random.
 // This can later be switched to any weight-based algorithm.
-func (ctx *ServerContext) Publish(topic string, payload string) {
-	var eligibleGroupedClients []*ConnectedClient
-	for _, client := range ctx.connectedClientsMap {
-		if checkForTopicInArray(topic, client.Topics) {
-			if client.ClientGroup == "" {
-				_, err := client.Connection.Write([]byte(payload + "\n"))
-				if err != nil {
-					fmt.Println(err)
-				}
-			} else {
-				eligibleGroupedClients = append(eligibleGroupedClients, client)
-			}
-		}
-	}
+func (ctx *ServerContext) Publish(publish *packets.Publish) {
 
-	for _, clients := range convertToMapOfClients(eligibleGroupedClients) {
-		var client *ConnectedClient
-		if len(clients) == 1 {
-			client = clients[0]
-		} else {
-			rand.Seed(time.Now().Unix())
-			s := rand.NewSource(time.Now().Unix())
-			r := rand.New(s) // initialize local pseudorandom generator
-			luckyClientIndex := r.Intn(len(clients))
-			client = clients[luckyClientIndex]
-		}
-		_, _ = client.Connection.Write([]byte(payload + "\n"))
-	}
 }
 
 // RemoveClient removes a ConnectedClient from the ServerContext
@@ -120,25 +81,16 @@ func convertToMapOfClients(clients []*ConnectedClient) map[string][]*ConnectedCl
 	return clientMap
 }
 
-func (ctx *ServerContext) checkForClient(conn net.Conn, clientID string) (clientExists bool, clientIdMismatchErr error) {
+func (ctx *ServerContext) checkForClient(clientID string) bool {
 	ctx.mu.RLock()
 	defer ctx.mu.RUnlock()
 
-	newAddr := conn.RemoteAddr().String()
-	for oldClientID, existingClient := range ctx.connectedClientsMap {
-		oldAddr := existingClient.Connection.RemoteAddr().String()
-
-		if clientID == oldClientID && newAddr == oldAddr {
-			return true, nil
-		}
-
-		if clientID == oldClientID && newAddr != oldAddr {
-			return true, errors.New("clientID was used elsewhere")
-		} else if clientID != oldClientID && newAddr == oldAddr {
-			return true, errors.New("this connection was previously bound to another clientID")
+	for oldClientID := range ctx.connectedClientsMap {
+		if clientID == oldClientID {
+			return true
 		}
 	}
-	return false, nil
+	return false
 }
 
 func (ctx *ServerContext) subscribe(clientID string, topic string) {
@@ -160,9 +112,10 @@ func checkForTopicInArray(topic string, topics []string) bool {
 
 // ConnectedClient stores the information about a currently connected client
 type ConnectedClient struct {
-	Connection  net.Conn
-	Topics      []string
-	ClientID    string
-	ClientGroup string
-	IsActive    bool
+	Connection   net.Conn
+	Topics       []string
+	ClientID     string
+	ClientGroup  string
+	IsConnected  bool
+	Subscription map[string]paho.SubscribeOptions
 }

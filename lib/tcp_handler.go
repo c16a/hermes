@@ -48,24 +48,24 @@ func (s *SimpleTcpHandler) Handle(conn net.Conn, ctx *ServerContext) ([]byte, bo
 }
 
 func (s *SimpleTcpHandler) handlePublishCall(elements []string, ctx *ServerContext) ([]byte, error) {
-	topic, payload, err := ParsePublishCall(elements)
-	if err != nil {
-		return nil, err
-	}
-	ctx.Publish(topic, payload)
+	//topic, payload, err := ParsePublishCall(elements)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//ctx.Publish(topic, payload)
 	return []byte("OK\n"), nil
 }
 
 func (s *SimpleTcpHandler) handleSubscribeCall(elements []string, conn net.Conn, ctx *ServerContext) ([]byte, error) {
-	clientID, clientGroup, topic, err := ParseSubscribeCall(elements)
-	if err != nil {
-		return nil, err
-	}
+	//clientID, clientGroup, topic, err := ParseSubscribeCall(elements)
+	//if err != nil {
+	//	return nil, err
+	//}
 
-	err = ctx.AddSubscribingClient(conn, clientID, clientGroup, topic)
-	if err != nil {
-		return []byte(err.Error() + "\n"), err
-	}
+	//err = ctx.AddSubscribingClient(conn, clientID, clientGroup, topic)
+	//if err != nil {
+	//	return []byte(err.Error() + "\n"), err
+	//}
 	return []byte("OK\n"), nil
 }
 
