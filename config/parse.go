@@ -3,13 +3,13 @@ package config
 import (
 	"encoding/json"
 	"errors"
-	"gopkg.in/yaml.v2"
 	"io/ioutil"
 	"net/http"
 	"net/url"
-	"os"
 	"path/filepath"
 	"time"
+
+	"gopkg.in/yaml.v2"
 )
 
 // ParseConfig parses a file path and returns a config
@@ -63,11 +63,7 @@ func downloadFile(url string) ([]byte, error) {
 }
 
 func readLocalFile(filePath string) ([]byte, error) {
-	file, err := os.Open(filePath)
-	if err != nil {
-		return nil, err
-	}
-	return ioutil.ReadAll(file)
+	return ioutil.ReadFile(filePath)
 }
 
 func parseConfig(fileBytes []byte, extension string) (*Config, error) {
