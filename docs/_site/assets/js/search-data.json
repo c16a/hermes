@@ -1,0 +1,38 @@
+{"0": {
+    "doc": "About",
+    "title": "About",
+    "content": "Hermes is a tiny MQTT broker written in Go. You can find the source code for Hermes at GitHub: c16a/hermes . ",
+    "url": "http://localhost:4000/about/",
+    "relUrl": "/about/"
+  },"1": {
+    "doc": "Building from source",
+    "title": "Building from source",
+    "content": "Hermes can be build on Linux, macOS, or Windows host systems. ",
+    "url": "http://localhost:4000/running-locally/source",
+    "relUrl": "/running-locally/source"
+  },"2": {
+    "doc": "Building from source",
+    "title": "Prerequisites",
+    "content": ". | Git | Golang 1.15 or above | . ",
+    "url": "http://localhost:4000/running-locally/source#prerequisites",
+    "relUrl": "/running-locally/source#prerequisites"
+  },"3": {
+    "doc": "Building from source",
+    "title": "Building",
+    "content": "You can build a binary for the current host system like below . git clone https://github.com/c16a/hermes cd hermes go build -ldflags=\"-s -w\" -o binary github.com/c16a/hermes/app . Cross compiling . If you wish to cross compile for a different operating system or architecture, you can use the GOOS and GOARCH environment variables. # List all possible cross compilation combinations go tool dist list # For example, to build for Linux ARM 64-bit targets, use the below GOOS=linux GOOS=arm64 go build -ldflags=\"-s -w\" -o binary github.com/c16a/hermes/app . ",
+    "url": "http://localhost:4000/running-locally/source#building",
+    "relUrl": "/running-locally/source#building"
+  },"4": {
+    "doc": "Using Docker",
+    "title": "Using Docker",
+    "content": "Hermes uses a multi-stage Docker build for a minimal runtime. git clone https://github.com/c16a/hermes cd hermes docker build -t hermes-image . ",
+    "url": "http://localhost:4000/running-locally/docker",
+    "relUrl": "/running-locally/docker"
+  },"5": {
+    "doc": "Running locally",
+    "title": "Running locally",
+    "content": " ",
+    "url": "http://localhost:4000/running-locally/",
+    "relUrl": "/running-locally/"
+  }
+}
