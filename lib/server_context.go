@@ -1,7 +1,9 @@
 package lib
 
 import (
+	"errors"
 	"fmt"
+	"github.com/c16a/hermes/config"
 	"github.com/eclipse/paho.golang/packets"
 	"net"
 	"sync"
@@ -11,15 +13,17 @@ import (
 type ServerContext struct {
 	connectedClientsMap map[string]*ConnectedClient
 	mu                  *sync.RWMutex
+	config              *config.Config
 }
 
 // NewServerContext creates a new server context.
 //
 // This should only be called once per cluster node.
-func NewServerContext() *ServerContext {
+func NewServerContext(config *config.Config) *ServerContext {
 	return &ServerContext{
 		mu:                  &sync.RWMutex{},
 		connectedClientsMap: make(map[string]*ConnectedClient, 0),
+		config:              config,
 	}
 }
 
@@ -92,14 +96,48 @@ func (ctx *ServerContext) Publish(publish *packets.Publish) {
 	}
 }
 
-func (ctx *ServerContext) Subscribe(conn net.Conn, subscribe *packets.Subscribe) {
+func (ctx *ServerContext) Subscribe(conn net.Conn, subscribe *packets.Subscribe) []byte {
+	var subAckBytes []byte
 	for _, client := range ctx.connectedClientsMap {
 		if conn == client.Connection {
 			for topic, options := range subscribe.Subscriptions {
 				client.Subscription[topic] = options
+
+				var subAckByte byte
+				switch options.QoS {
+				case 0:
+					subAckByte = packets.SubackGrantedQoS0
+					break
+				case 1:
+					subAckByte = packets.SubackGrantedQoS1
+					break
+				case 2:
+					subAckByte = packets.SubackGrantedQoS2
+					break
+				default:
+					subAckByte = packets.SubackUnspecifiederror
+				}
+				subAckBytes = append(subAckBytes, subAckByte)
 			}
 		}
 	}
+	return subAckBytes
+}
+
+func (ctx *ServerContext) Unsubscribe(conn net.Conn, unsubscribe *packets.Unsubscribe) []byte {
+	client, _ := ctx.getClientForConnection(conn)
+
+	var unsubAckBytes []byte
+	for _, topic := range unsubscribe.Topics {
+		_, ok := client.Subscription[topic]
+		if ok {
+			delete(client.Subscription, topic)
+			unsubAckBytes = append(unsubAckBytes, packets.UnsubackSuccess)
+		} else {
+			unsubAckBytes = append(unsubAckBytes, packets.UnsubackNoSubscriptionFound)
+		}
+	}
+	return unsubAckBytes
 }
 
 func (ctx *ServerContext) checkForClient(clientID string) bool {
@@ -112,6 +150,15 @@ func (ctx *ServerContext) checkForClient(clientID string) bool {
 		}
 	}
 	return false
+}
+
+func (ctx *ServerContext) getClientForConnection(conn net.Conn) (*ConnectedClient, error) {
+	for _, client := range ctx.connectedClientsMap {
+		if conn == client.Connection {
+			return client, nil
+		}
+	}
+	return nil, errors.New("client not found for connection")
 }
 
 func checkForTopicInArray(topic string, topics []string) bool {

@@ -18,7 +18,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	ctx := lib.NewServerContext()
+	ctx := lib.NewServerContext(serverConfig)
 
 	go startWebSocketServer(serverConfig, ctx)
 	startTcpServer(serverConfig, ctx)

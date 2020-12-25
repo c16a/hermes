@@ -28,8 +28,15 @@ func (handler *MqttHandler) Handle(conn net.Conn, ctx *ServerContext) {
 		break
 	case packets.SUBSCRIBE:
 		packetHandler = handleSubscribe
+		break
+	case packets.UNSUBSCRIBE:
+		packetHandler = handleUnsubscribe
+		break
 	case packets.DISCONNECT:
 		packetHandler = handleDisconnect
+		break
+	case packets.PINGREQ:
+		packetHandler = handlePingRequest
 	default:
 		return
 	}
@@ -54,7 +61,7 @@ func handleConnect(conn net.Conn, controlPacket *packets.ControlPacket, ctx *Ser
 	connAckPacket := packets.Connack{
 		Properties: &packets.Properties{
 			AssignedClientID: connectPacket.ClientID,
-			MaximumQOS:       paho.Byte(2),
+			MaximumQOS:       paho.Byte(ctx.config.Server.MaxQos),
 		},
 		ReasonCode:     reasonCode,
 		SessionPresent: sessionExists,
@@ -73,6 +80,20 @@ func handleDisconnect(conn net.Conn, controlPacket *packets.ControlPacket, ctx *
 	}
 
 	ctx.Disconnect(conn, disconnectPacket)
+}
+
+func handlePingRequest(conn net.Conn, controlPacket *packets.ControlPacket, ctx *ServerContext) {
+	_, ok := controlPacket.Content.(*packets.Pingreq)
+	if !ok {
+		return
+	}
+
+	pingResponsePacket := packets.Pingresp{}
+	_, err := pingResponsePacket.WriteTo(conn)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
 }
 
 func handlePublish(conn net.Conn, controlPacket *packets.ControlPacket, ctx *ServerContext) {
@@ -114,13 +135,28 @@ func handleSubscribe(conn net.Conn, controlPacket *packets.ControlPacket, ctx *S
 		return
 	}
 
-	ctx.Subscribe(conn, subscribePacket)
-
 	subAck := packets.Suback{
 		PacketID: subscribePacket.PacketID,
-		Reasons:  []byte{packets.SubackGrantedQoS0},
+		Reasons:  ctx.Subscribe(conn, subscribePacket),
 	}
 	_, err := subAck.WriteTo(conn)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+}
+
+func handleUnsubscribe(conn net.Conn, controlPacket *packets.ControlPacket, ctx *ServerContext) {
+	unsubscribePacket, ok := controlPacket.Content.(*packets.Unsubscribe)
+	if !ok {
+		return
+	}
+
+	unsubAck := packets.Unsuback{
+		PacketID: unsubscribePacket.PacketID,
+		Reasons:  ctx.Unsubscribe(conn, unsubscribePacket),
+	}
+	_, err := unsubAck.WriteTo(conn)
 	if err != nil {
 		fmt.Println(err)
 		return
