@@ -17,4 +17,4 @@ configured to listen on port 4000.
 In case that is configured to another port, 
 please configure the docker exposed port accordingly.
 
-The [Configuration](/configuration) section has more details on which attributes of the broker can be configured.
+The [Configuration](configuration.md) section has more details on which attributes of the broker can be configured.
