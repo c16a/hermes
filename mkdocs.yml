@@ -1,3 +1,41 @@
 site_name: Hermes
+repo_name: c16a/hermes
+repo_url: https://github.com/c16a/hermes
 theme:
   name: material
+  features:
+    - navigation.instant
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+  icon:
+    repo: fontawesome/brands/github
+  font:
+    text: IBM Plex Sans
+    code: JetBrains Mono
+
+nav:
+  - Home: index.md
+  - Developer Guide:
+      - 'Running Locally':
+        - 'Using Docker': docker-build.md
+        - 'Building from source': source-build.md
+      - 'Configuration': configuration.md
+  - User Guide:
+      - 'Java': java.md
+  - About: about.md
+
+markdown_extensions:
+  - pymdownx.highlight
+  - pymdownx.inlinehilite
+  - pymdownx.superfences
+  - attr_list
+
+extra:
+  social:
+    - icon: fontawesome/brands/twitter
+      link: https://twitter.com/iamunukutla
+    - icon: fontawesome/brands/github
+      link: https://github.com/c16a
+
+copyright: Copyright &copy; 2020 Chaitanya Munukutla
