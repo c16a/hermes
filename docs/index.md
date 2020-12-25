@@ -20,3 +20,6 @@ When messaging systems are built on open standards, it grows the ecosystem inste
 Hermes was born out of boredom during the COVID-19 pandemic, and the initial directions were discussed over a [**Reddit post**](https://www.reddit.com/r/golang/comments/kisutt/tiny_message_broker_written_in_go_nothing_serious).
 All discussions, and development are done on GitHub. There will never be an *enterprise*, or *premium* flavor of Hermes. 
 It is however, MIT Licensed - you are free to use it however you wish to.
+
+#### Baby Yoda eating cookies is cute
+![Baby Yoda](assets/baby_yoda.jpg){: loading=lazy }
