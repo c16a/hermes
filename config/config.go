@@ -10,7 +10,7 @@ type Server struct {
 	Tls         *Tls   `json:"tls" yaml:"tls"`
 	TcpAddress  string `json:"tcp,omitempty" yaml:"tcp,omitempty"`
 	HttpAddress string `json:"http,omitempty" yaml:"http,omitempty"`
-	MaxQos      byte `json:"max_qos,omitempty" yaml:"max_qos,omitempty"`
+	MaxQos      byte   `json:"max_qos,omitempty" yaml:"max_qos,omitempty"`
 }
 
 // Tls stores the TLS config for the server

@@ -102,20 +102,24 @@ func (ctx *ServerContext) Subscribe(conn net.Conn, subscribe *packets.Subscribe)
 		if conn == client.Connection {
 			for topic, options := range subscribe.Subscriptions {
 				client.Subscription[topic] = options
-
 				var subAckByte byte
-				switch options.QoS {
-				case 0:
-					subAckByte = packets.SubackGrantedQoS0
-					break
-				case 1:
-					subAckByte = packets.SubackGrantedQoS1
-					break
-				case 2:
-					subAckByte = packets.SubackGrantedQoS2
-					break
-				default:
-					subAckByte = packets.SubackUnspecifiederror
+
+				if options.QoS > ctx.config.Server.MaxQos {
+					subAckByte = packets.SubackImplementationspecificerror
+				} else {
+					switch options.QoS {
+					case 0:
+						subAckByte = packets.SubackGrantedQoS0
+						break
+					case 1:
+						subAckByte = packets.SubackGrantedQoS1
+						break
+					case 2:
+						subAckByte = packets.SubackGrantedQoS2
+						break
+					default:
+						subAckByte = packets.SubackUnspecifiederror
+					}
 				}
 				subAckBytes = append(subAckBytes, subAckByte)
 			}
