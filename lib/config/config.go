@@ -11,10 +11,18 @@ type Server struct {
 	TcpAddress  string `json:"tcp,omitempty" yaml:"tcp,omitempty"`
 	HttpAddress string `json:"http,omitempty" yaml:"http,omitempty"`
 	MaxQos      byte   `json:"max_qos,omitempty" yaml:"max_qos,omitempty"`
+	Auth        *Auth  `json:"auth,omitempty" yaml:"auth,omitempty"`
 }
 
 // Tls stores the TLS config for the server
 type Tls struct {
 	CertFile string `json:"cert,omitempty" yaml:"cert,omitempty"`
 	KeyFile  string `json:"key,omitempty" yaml:"key,omitempty"`
+}
+
+type Auth struct {
+	Type     string `json:"type,omitempty" yaml:"type,omitempty"`
+	LdapHost string `json:"ldap_host,omitempty" yaml:"ldap_host,omitempty"`
+	LdapPort int    `json:"ldap_port,omitempty" yaml:"ldap_port,omitempty"`
+	LdapDn   string `json:"ldap_dn,omitempty" yaml:"ldap_dn,omitempty"`
 }

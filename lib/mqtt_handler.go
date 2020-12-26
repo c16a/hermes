@@ -2,6 +2,7 @@ package lib
 
 import (
 	"fmt"
+	"github.com/c16a/hermes/lib/auth"
 	"github.com/eclipse/paho.golang/packets"
 	"github.com/eclipse/paho.golang/paho"
 	uuid "github.com/satori/go.uuid"
@@ -9,6 +10,7 @@ import (
 )
 
 type MqttHandler struct {
+	authProvider auth.AuthorisationProvider
 }
 
 func (handler *MqttHandler) Handle(conn net.Conn, ctx *ServerContext) {
@@ -48,24 +50,39 @@ func (handler *MqttHandler) Handle(conn net.Conn, ctx *ServerContext) {
 
 func handleConnect(conn net.Conn, controlPacket *packets.ControlPacket, ctx *ServerContext) {
 	connectPacket, ok := controlPacket.Content.(*packets.Connect)
+	if !ok {
+		return
+	}
 
 	if len(connectPacket.ClientID) == 0 {
 		connectPacket.ClientID = uuid.NewV4().String()
 	}
-	if ok {
-	} else {
-		return
-	}
 
-	reasonCode, sessionExists := ctx.AddClient(conn, connectPacket)
 	connAckPacket := packets.Connack{
 		Properties: &packets.Properties{
 			AssignedClientID: connectPacket.ClientID,
 			MaximumQOS:       paho.Byte(ctx.config.Server.MaxQos),
 		},
-		ReasonCode:     reasonCode,
-		SessionPresent: sessionExists,
 	}
+
+	var reasonCode byte
+	var sessionPresent bool
+	var authError error
+
+	if ctx.authProvider != nil {
+		authError = ctx.authProvider.Validate(connectPacket.Username, string(connectPacket.Password))
+		if authError != nil {
+			reasonCode = 135
+			sessionPresent = false
+		}
+	}
+
+	if authError == nil {
+		reasonCode, sessionPresent = ctx.AddClient(conn, connectPacket)
+	}
+
+	connAckPacket.ReasonCode = reasonCode
+	connAckPacket.SessionPresent = sessionPresent
 
 	_, err := connAckPacket.WriteTo(conn)
 	if err != nil {

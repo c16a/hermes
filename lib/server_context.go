@@ -3,6 +3,7 @@ package lib
 import (
 	"errors"
 	"fmt"
+	"github.com/c16a/hermes/lib/auth"
 	"github.com/c16a/hermes/lib/config"
 	"github.com/c16a/hermes/lib/persistence"
 	"github.com/eclipse/paho.golang/packets"
@@ -15,6 +16,7 @@ type ServerContext struct {
 	connectedClientsMap map[string]*ConnectedClient
 	mu                  *sync.RWMutex
 	config              *config.Config
+	authProvider        auth.AuthorisationProvider
 	persistenceProvider persistence.Provider
 }
 
@@ -22,6 +24,11 @@ type ServerContext struct {
 //
 // This should only be called once per cluster node.
 func NewServerContext(config *config.Config) (*ServerContext, error) {
+	authProvider, err := auth.FetchProviderFromConfig(config)
+	if err != nil {
+		return nil, err
+	}
+
 	persistenceProvider, err := persistence.NewBadgerProvider()
 	if err != nil {
 		return nil, err
@@ -30,6 +37,7 @@ func NewServerContext(config *config.Config) (*ServerContext, error) {
 		mu:                  &sync.RWMutex{},
 		connectedClientsMap: make(map[string]*ConnectedClient, 0),
 		config:              config,
+		authProvider:        authProvider,
 		persistenceProvider: persistenceProvider,
 	}, nil
 }
