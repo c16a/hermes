@@ -4,11 +4,14 @@ import (
 	"github.com/c16a/hermes/config"
 	"github.com/c16a/hermes/lib"
 	"log"
+	"os"
 )
 
 func main() {
 
-	serverConfig, err := config.ParseConfig("config.json")
+	configFilePath := os.Getenv("CONFIG_FILE_PATH")
+
+	serverConfig, err := config.ParseConfig(configFilePath)
 	if err != nil {
 		log.Fatal(err)
 	}
