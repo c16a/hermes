@@ -3,7 +3,7 @@ package lib
 import (
 	"crypto/tls"
 	"fmt"
-	"github.com/c16a/hermes/config"
+	"github.com/c16a/hermes/lib/config"
 	"net"
 )
 

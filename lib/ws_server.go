@@ -2,7 +2,7 @@ package lib
 
 import (
 	"fmt"
-	"github.com/c16a/hermes/config"
+	"github.com/c16a/hermes/lib/config"
 	"github.com/gorilla/websocket"
 	"log"
 	"net/http"
