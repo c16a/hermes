@@ -2,7 +2,7 @@ package auth
 
 import (
 	"errors"
-	"github.com/c16a/hermes/config"
+	"github.com/c16a/hermes/lib/config"
 )
 
 type AuthorisationProvider interface {

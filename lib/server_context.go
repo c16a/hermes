@@ -3,8 +3,9 @@ package lib
 import (
 	"errors"
 	"fmt"
-	"github.com/c16a/hermes/config"
 	"github.com/c16a/hermes/lib/auth"
+	"github.com/c16a/hermes/lib/config"
+	"github.com/c16a/hermes/lib/persistence"
 	"github.com/eclipse/paho.golang/packets"
 	"net"
 	"sync"
@@ -16,18 +17,29 @@ type ServerContext struct {
 	mu                  *sync.RWMutex
 	config              *config.Config
 	authProvider        auth.AuthorisationProvider
+	persistenceProvider persistence.Provider
 }
 
 // NewServerContext creates a new server context.
 //
 // This should only be called once per cluster node.
-func NewServerContext(config *config.Config, authProvider auth.AuthorisationProvider) *ServerContext {
+func NewServerContext(config *config.Config) (*ServerContext, error) {
+	authProvider, err := auth.FetchProviderFromConfig(config)
+	if err != nil {
+		return nil, err
+	}
+
+	persistenceProvider, err := persistence.NewBadgerProvider()
+	if err != nil {
+		return nil, err
+	}
 	return &ServerContext{
 		mu:                  &sync.RWMutex{},
 		connectedClientsMap: make(map[string]*ConnectedClient, 0),
 		config:              config,
 		authProvider:        authProvider,
-	}
+		persistenceProvider: persistenceProvider,
+	}, nil
 }
 
 func (ctx *ServerContext) AddClient(conn net.Conn, connect *packets.Connect) (code byte, sessionExists bool) {
@@ -40,6 +52,8 @@ func (ctx *ServerContext) AddClient(conn net.Conn, connect *packets.Connect) (co
 			ctx.doAddClient(conn, connect)
 		} else {
 			ctx.doUpdateClient(connect.ClientID, conn)
+			fmt.Println("Fetching offline messages")
+			_ = ctx.sendMissedMessages(connect.ClientID, conn)
 		}
 	} else {
 		ctx.doAddClient(conn, connect)
@@ -89,6 +103,14 @@ func (ctx *ServerContext) Publish(publish *packets.Publish) {
 		topicToTarget := publish.Topic
 		if _, ok := client.Subscription[topicToTarget]; ok {
 			if !client.IsConnected {
+				if !client.IsClean {
+					// save for offline usage
+					fmt.Printf("Saving for offline delivery since %s is offline\n", client.ClientID)
+					saveError := ctx.persistenceProvider.SaveForOfflineDelivery(client.ClientID, publish)
+					if saveError != nil {
+						fmt.Println("Error while saving message for offline delivery")
+					}
+				}
 				continue
 			}
 			_, err := publish.WriteTo(client.Connection)
@@ -168,28 +190,19 @@ func (ctx *ServerContext) getClientForConnection(conn net.Conn) (*ConnectedClien
 	return nil, errors.New("client not found for connection")
 }
 
-func checkForTopicInArray(topic string, topics []string) bool {
-	for _, t := range topics {
-		if topic == t {
-			return true
+func (ctx *ServerContext) sendMissedMessages(clientId string, conn net.Conn) error {
+	missedMessages, err := ctx.persistenceProvider.GetMissedMessages(clientId)
+	if err != nil {
+		return err
+	}
+
+	for _, msg := range missedMessages {
+		_, writeErr := msg.WriteTo(conn)
+		if writeErr != nil {
+			fmt.Println("Failed to send missed message: ", writeErr.Error())
 		}
 	}
-	return false
-}
-
-func convertToMapOfClients(clients []*ConnectedClient) map[string][]*ConnectedClient {
-	var clientMap = make(map[string][]*ConnectedClient, 0)
-
-	for _, client := range clients {
-		groupedClients, ok := clientMap[client.ClientGroup]
-		if ok {
-			groupedClients = append(groupedClients, client)
-			clientMap[client.ClientGroup] = groupedClients
-		} else {
-			clientMap[client.ClientGroup] = []*ConnectedClient{client}
-		}
-	}
-	return clientMap
+	return nil
 }
 
 // ConnectedClient stores the information about a currently connected client

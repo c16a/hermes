@@ -2,7 +2,7 @@ package auth
 
 import (
 	"fmt"
-	"github.com/c16a/hermes/config"
+	"github.com/c16a/hermes/lib/config"
 	"github.com/go-ldap/ldap/v3"
 )
 
