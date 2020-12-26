@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/c16a/hermes/config"
+	"github.com/c16a/hermes/lib/auth"
 	"github.com/eclipse/paho.golang/packets"
 	"net"
 	"sync"
@@ -14,16 +15,18 @@ type ServerContext struct {
 	connectedClientsMap map[string]*ConnectedClient
 	mu                  *sync.RWMutex
 	config              *config.Config
+	authProvider        auth.AuthorisationProvider
 }
 
 // NewServerContext creates a new server context.
 //
 // This should only be called once per cluster node.
-func NewServerContext(config *config.Config) *ServerContext {
+func NewServerContext(config *config.Config, authProvider auth.AuthorisationProvider) *ServerContext {
 	return &ServerContext{
 		mu:                  &sync.RWMutex{},
 		connectedClientsMap: make(map[string]*ConnectedClient, 0),
 		config:              config,
+		authProvider:        authProvider,
 	}
 }
 
