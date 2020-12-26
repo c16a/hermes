@@ -7,9 +7,12 @@ RUN go mod download
 
 ADD . .
 ENV CGO_ENABLED=0
-RUN go build -ldflags="-s -w" -o binary_amd64 github.com/c16a/hermes/app
+RUN go build -ldflags="-s -w" -o binary github.com/c16a/hermes/app
 
-FROM scratch
+FROM alpine
 WORKDIR /app
-COPY --from=builder /app/binary_amd64 .
-CMD ["/app/binary_amd64"]
+
+ENV CONFIG_FILE_PATH="/var/config.json"
+
+COPY --from=builder /app/binary .
+CMD /app/binary
