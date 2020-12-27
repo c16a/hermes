@@ -64,11 +64,11 @@ func (ctx *ServerContext) AddClient(conn io.Writer, connect *packets.Connect) (c
 
 func (ctx *ServerContext) doAddClient(conn io.Writer, connect *packets.Connect) {
 	newClient := &ConnectedClient{
-		Connection:   conn,
-		ClientID:     connect.ClientID,
-		IsClean:      connect.CleanStart,
-		IsConnected:  true,
-		Subscription: make(map[string]packets.SubOptions, 0),
+		Connection:    conn,
+		ClientID:      connect.ClientID,
+		IsClean:       connect.CleanStart,
+		IsConnected:   true,
+		Subscriptions: make(map[string]packets.SubOptions, 0),
 	}
 	ctx.mu.Lock()
 	ctx.connectedClientsMap[connect.ClientID] = newClient
@@ -102,13 +102,16 @@ func (ctx *ServerContext) Disconnect(conn io.Writer, disconnect *packets.Disconn
 func (ctx *ServerContext) Publish(publish *packets.Publish) {
 	for _, client := range ctx.connectedClientsMap {
 		topicToTarget := publish.Topic
-		if _, ok := client.Subscription[topicToTarget]; ok {
+		if _, ok := client.Subscriptions[topicToTarget]; ok {
 			if !client.IsConnected && !client.IsClean {
 				// save for offline usage
-				fmt.Printf("Saving for offline delivery since %s is offline\n", client.ClientID)
-				ctx.persistenceProvider.SaveForOfflineDelivery(client.ClientID, publish)
+				if ctx.persistenceProvider != nil {
+					ctx.persistenceProvider.SaveForOfflineDelivery(client.ClientID, publish)
+				}
 			}
-			publish.WriteTo(client.Connection)
+			if client.IsConnected {
+				publish.WriteTo(client.Connection)
+			}
 		}
 	}
 }
@@ -121,7 +124,7 @@ func (ctx *ServerContext) Subscribe(conn io.Writer, subscribe *packets.Subscribe
 	for _, client := range ctx.connectedClientsMap {
 		if conn == client.Connection {
 			for topic, options := range subscribe.Subscriptions {
-				client.Subscription[topic] = options
+				client.Subscriptions[topic] = options
 				var subAckByte byte
 
 				if options.QoS > ctx.config.Server.MaxQos {
@@ -153,9 +156,9 @@ func (ctx *ServerContext) Unsubscribe(conn io.Writer, unsubscribe *packets.Unsub
 
 	var unsubAckBytes []byte
 	for _, topic := range unsubscribe.Topics {
-		_, ok := client.Subscription[topic]
+		_, ok := client.Subscriptions[topic]
 		if ok {
-			delete(client.Subscription, topic)
+			delete(client.Subscriptions, topic)
 			unsubAckBytes = append(unsubAckBytes, packets.UnsubackSuccess)
 		} else {
 			unsubAckBytes = append(unsubAckBytes, packets.UnsubackNoSubscriptionFound)
@@ -202,10 +205,10 @@ func (ctx *ServerContext) sendMissedMessages(clientId string, conn io.Writer) er
 
 // ConnectedClient stores the information about a currently connected client
 type ConnectedClient struct {
-	Connection   io.Writer
-	ClientID     string
-	ClientGroup  string
-	IsConnected  bool
-	IsClean      bool
-	Subscription map[string]packets.SubOptions
+	Connection    io.Writer
+	ClientID      string
+	ClientGroup   string
+	IsConnected   bool
+	IsClean       bool
+	Subscriptions map[string]packets.SubOptions
 }

@@ -7,8 +7,6 @@ import (
 	"github.com/eclipse/paho.golang/packets"
 	"io"
 	"io/ioutil"
-	"log"
-	"net"
 	"reflect"
 	"sync"
 	"testing"
@@ -180,7 +178,7 @@ func TestServerContext_Disconnect(t *testing.T) {
 		persistenceProvider persistence.Provider
 	}
 	type args struct {
-		conn       net.Conn
+		conn       io.Writer
 		disconnect *packets.Disconnect
 	}
 	tests := []struct {
@@ -188,7 +186,46 @@ func TestServerContext_Disconnect(t *testing.T) {
 		fields fields
 		args   args
 	}{
-		// TODO: Add test cases.
+		{
+			"Deleting clean client",
+			fields{
+				map[string]*ConnectedClient{
+					"abcd": {
+						ClientID:   "abcd",
+						Connection: ioutil.Discard,
+						IsClean:    true,
+					},
+				},
+				&sync.RWMutex{},
+				&config.Config{},
+				nil,
+				nil,
+			},
+			args{
+				ioutil.Discard,
+				&packets.Disconnect{},
+			},
+		},
+		{
+			"Deleting persisted client",
+			fields{
+				map[string]*ConnectedClient{
+					"abcd": {
+						ClientID:   "abcd",
+						Connection: ioutil.Discard,
+						IsClean:    false,
+					},
+				},
+				&sync.RWMutex{},
+				&config.Config{},
+				nil,
+				nil,
+			},
+			args{
+				ioutil.Discard,
+				&packets.Disconnect{},
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -199,7 +236,7 @@ func TestServerContext_Disconnect(t *testing.T) {
 				authProvider:        tt.fields.authProvider,
 				persistenceProvider: tt.fields.persistenceProvider,
 			}
-			log.Println(ctx)
+			ctx.Disconnect(tt.args.conn, tt.args.disconnect)
 		})
 	}
 }
@@ -220,7 +257,83 @@ func TestServerContext_Publish(t *testing.T) {
 		fields fields
 		args   args
 	}{
-		// TODO: Add test cases.
+		{
+			name: "Publish to connected client",
+			fields: fields{
+				map[string]*ConnectedClient{
+					"abcd": {
+						ClientID:    "abcd",
+						Connection:  ioutil.Discard,
+						IsConnected: true,
+						Subscriptions: map[string]packets.SubOptions{
+							"foo": {},
+						},
+					},
+				},
+				&sync.RWMutex{},
+				&config.Config{},
+				nil,
+				nil,
+			},
+			args: args{
+				&packets.Publish{
+					Topic:   "foo",
+					Payload: []byte("Hello World"),
+				},
+			},
+		},
+		{
+			name: "Publish to disconnected persistent client (no persistence)",
+			fields: fields{
+				map[string]*ConnectedClient{
+					"abcd": {
+						ClientID:    "abcd",
+						Connection:  ioutil.Discard,
+						IsConnected: false,
+						IsClean:     false,
+						Subscriptions: map[string]packets.SubOptions{
+							"foo": {},
+						},
+					},
+				},
+				&sync.RWMutex{},
+				&config.Config{},
+				nil,
+				nil,
+			},
+			args: args{
+				&packets.Publish{
+					Topic:   "foo",
+					Payload: []byte("Hello World"),
+				},
+			},
+		},
+		{
+			name: "Publish to disconnected persistent client (with persistence)",
+			fields: fields{
+				map[string]*ConnectedClient{
+					"abcd": {
+						ClientID:    "abcd",
+						Connection:  ioutil.Discard,
+						IsConnected: false,
+						IsClean:     false,
+						Subscriptions: map[string]packets.SubOptions{
+							"foo": {},
+						},
+					},
+				},
+				&sync.RWMutex{},
+				&config.Config{},
+				nil,
+				&MockPersistenceProvider{},
+			},
+			args: args{
+				&packets.Publish{
+					Topic:   "foo",
+					Payload: []byte("Hello World"),
+				},
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -231,7 +344,7 @@ func TestServerContext_Publish(t *testing.T) {
 				authProvider:        tt.fields.authProvider,
 				persistenceProvider: tt.fields.persistenceProvider,
 			}
-			log.Println(ctx)
+			ctx.Publish(tt.args.publish)
 		})
 	}
 }
@@ -245,7 +358,7 @@ func TestServerContext_Subscribe(t *testing.T) {
 		persistenceProvider persistence.Provider
 	}
 	type args struct {
-		conn      net.Conn
+		conn      io.Writer
 		subscribe *packets.Subscribe
 	}
 	tests := []struct {
@@ -254,7 +367,138 @@ func TestServerContext_Subscribe(t *testing.T) {
 		args   args
 		want   []byte
 	}{
-		// TODO: Add test cases.
+		{
+			"Subscribing QoS 0",
+			fields{
+				map[string]*ConnectedClient{
+					"abcd": {
+						ClientID:      "abcd",
+						Connection:    ioutil.Discard,
+						IsConnected:   false,
+						IsClean:       false,
+						Subscriptions: make(map[string]packets.SubOptions, 0),
+					},
+				},
+				&sync.RWMutex{},
+				&config.Config{
+					Server: &config.Server{
+						MaxQos: 2,
+					},
+				},
+				nil,
+				&MockPersistenceProvider{},
+			},
+			args{
+				ioutil.Discard,
+				&packets.Subscribe{
+					Subscriptions: map[string]packets.SubOptions{
+						"foo": {
+							QoS: 0,
+						},
+					},
+				},
+			},
+			[]byte{packets.SubackGrantedQoS0},
+		},
+		{
+			"Subscribing QoS 1",
+			fields{
+				map[string]*ConnectedClient{
+					"abcd": {
+						ClientID:      "abcd",
+						Connection:    ioutil.Discard,
+						IsConnected:   false,
+						IsClean:       false,
+						Subscriptions: make(map[string]packets.SubOptions, 0),
+					},
+				},
+				&sync.RWMutex{},
+				&config.Config{
+					Server: &config.Server{
+						MaxQos: 2,
+					},
+				},
+				nil,
+				&MockPersistenceProvider{},
+			},
+			args{
+				ioutil.Discard,
+				&packets.Subscribe{
+					Subscriptions: map[string]packets.SubOptions{
+						"foo": {
+							QoS: 1,
+						},
+					},
+				},
+			},
+			[]byte{packets.SubackGrantedQoS1},
+		},
+		{
+			"Subscribing QoS 2",
+			fields{
+				map[string]*ConnectedClient{
+					"abcd": {
+						ClientID:      "abcd",
+						Connection:    ioutil.Discard,
+						IsConnected:   false,
+						IsClean:       false,
+						Subscriptions: make(map[string]packets.SubOptions, 0),
+					},
+				},
+				&sync.RWMutex{},
+				&config.Config{
+					Server: &config.Server{
+						MaxQos: 2,
+					},
+				},
+				nil,
+				&MockPersistenceProvider{},
+			},
+			args{
+				ioutil.Discard,
+				&packets.Subscribe{
+					Subscriptions: map[string]packets.SubOptions{
+						"foo": {
+							QoS: 2,
+						},
+					},
+				},
+			},
+			[]byte{packets.SubackGrantedQoS2},
+		},
+		{
+			"Subscribing to higher Qos",
+			fields{
+				map[string]*ConnectedClient{
+					"abcd": {
+						ClientID:      "abcd",
+						Connection:    ioutil.Discard,
+						IsConnected:   false,
+						IsClean:       false,
+						Subscriptions: make(map[string]packets.SubOptions, 0),
+					},
+				},
+				&sync.RWMutex{},
+				&config.Config{
+					Server: &config.Server{
+						MaxQos: 1,
+					},
+				},
+				nil,
+				&MockPersistenceProvider{},
+			},
+			args{
+				ioutil.Discard,
+				&packets.Subscribe{
+					Subscriptions: map[string]packets.SubOptions{
+						"foo": {
+							QoS: 2,
+						},
+					},
+				},
+			},
+			[]byte{packets.SubackImplementationspecificerror},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -281,7 +525,7 @@ func TestServerContext_Unsubscribe(t *testing.T) {
 		persistenceProvider persistence.Provider
 	}
 	type args struct {
-		conn        net.Conn
+		conn        io.Writer
 		unsubscribe *packets.Unsubscribe
 	}
 	tests := []struct {
@@ -290,7 +534,41 @@ func TestServerContext_Unsubscribe(t *testing.T) {
 		args   args
 		want   []byte
 	}{
-		// TODO: Add test cases.
+		{
+			"Unsubscribe known topic",
+			fields{
+				map[string]*ConnectedClient{
+					"abcd": {
+						ClientID:    "abcd",
+						Connection:  ioutil.Discard,
+						IsConnected: false,
+						IsClean:     false,
+						Subscriptions: map[string]packets.SubOptions{
+							"foo": {
+								QoS: 1,
+							},
+						},
+					},
+				},
+				&sync.RWMutex{},
+				&config.Config{
+					Server: &config.Server{
+						MaxQos: 1,
+					},
+				},
+				nil,
+				&MockPersistenceProvider{},
+			},
+			args{
+				conn: ioutil.Discard,
+				unsubscribe: &packets.Unsubscribe{
+					Topics:     []string{"foo", "bar"},
+					Properties: nil,
+					PacketID:   0,
+				},
+			},
+			[]byte{packets.UnsubackSuccess, packets.UnsubackNoSubscriptionFound},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
