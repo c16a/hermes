@@ -26,12 +26,12 @@ type ServerContext struct {
 func NewServerContext(config *config.Config) (*ServerContext, error) {
 	authProvider, err := auth.FetchProviderFromConfig(config)
 	if err != nil {
-		return nil, err
+		fmt.Println("auth provider setup failed:", err)
 	}
 
-	persistenceProvider, err := persistence.NewBadgerProvider()
+	persistenceProvider, err := persistence.NewBadgerProvider(config)
 	if err != nil {
-		return nil, err
+		fmt.Println("persistence provider setup failed:", err)
 	}
 	return &ServerContext{
 		mu:                  &sync.RWMutex{},

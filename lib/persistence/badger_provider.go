@@ -3,7 +3,10 @@ package persistence
 import (
 	"bytes"
 	"encoding/gob"
+	"errors"
+	"github.com/c16a/hermes/lib/config"
 	badger "github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/badger/v2/options"
 	"github.com/eclipse/paho.golang/packets"
 )
 
@@ -11,16 +14,32 @@ type BadgerProvider struct {
 	db *badger.DB
 }
 
-func NewBadgerProvider() (*BadgerProvider, error) {
-	db, err := openDB()
+func NewBadgerProvider(config *config.Config) (*BadgerProvider, error) {
+	db, err := openDB(config)
 	if err != nil {
 		return nil, err
 	}
 	return &BadgerProvider{db: db}, nil
 }
 
-func openDB() (*badger.DB, error) {
-	opts := badger.DefaultOptions("").WithInMemory(true)
+func openDB(config *config.Config) (*badger.DB, error) {
+	offlineConfig := config.Server.Offline
+
+	var opts badger.Options
+	if offlineConfig == nil {
+		return nil, errors.New("offline configuration disabled")
+	} else {
+		if len(offlineConfig.Path) == 0 {
+			opts = badger.DefaultOptions("").WithInMemory(true)
+		} else {
+			opts = badger.DefaultOptions(offlineConfig.Path)
+		}
+		opts.ValueLogLoadingMode = options.FileIO
+		opts.NumMemtables = offlineConfig.NumTables
+		opts.KeepL0InMemory = false
+		opts.MaxTableSize = offlineConfig.MaxTableSize
+	}
+
 	return badger.Open(opts)
 }
 
