@@ -8,6 +8,25 @@ on:
 
 jobs:
 
+  test:
+    name: Test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ ubuntu-20.04, windows-latest, macOS-11.0 ]
+
+    steps:
+      - name: Set up Go 1.x
+        uses: actions/setup-go@v2
+        with:
+          go-version: ^1.15
+
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v2
+
+      - name: Run tests
+        run: go test -v ./...
+
   build:
     name: Build
     runs-on: ubuntu-latest
@@ -52,15 +71,6 @@ jobs:
           name: hermes_linux_ppc64le
           path: build/hermes_linux_ppc64le
 
-#      - name: Build Linux RISC-V 64-bit
-#        run: GOOS=linux GOARCH=riscv64 go build -ldflags="-s -w" -o build/hermes_linux_riscv64 github.com/c16a/hermes/app
-#
-#      - name: Store Linux RISC-V 64-bit artifacts
-#        uses: actions/upload-artifact@v2
-#        with:
-#          name: hermes_linux_riscv64
-#          path: build/hermes_linux_riscv64
-
       - name: Build Windows x64
         run: GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o build/hermes_windows_amd64.exe github.com/c16a/hermes/app
 
@@ -78,13 +88,5 @@ jobs:
         with:
           name: hermes_mac_amd64
           path: build/hermes_mac_amd64
-#
-#      - name: Build AIX 64-bit
-#        run: GOOS=aix GOARCH=ppc64 go build -ldflags="-s -w" -o build/hermes_aix_ppc64 github.com/c16a/hermes/app
-#
-#      - name: Store AIX 64-bit artifacts
-#        uses: actions/upload-artifact@v2
-#        with:
-#          name: hermes_aix_ppc64
-#          path: build/hermes_aix_ppc64
+
 

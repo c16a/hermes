@@ -25,7 +25,7 @@ such as ActiveMQ, Solace, NATS etc.
 - [x] DISCONNECT
 - [x] Persistent sessions
 - [ ] QoS 2 support  
-- [ ] Offline messages
+- [x] Offline messages
 - [ ] MQTT over WebSocket
 - [ ] Clustering
 

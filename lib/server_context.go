@@ -7,7 +7,7 @@ import (
 	"github.com/c16a/hermes/lib/config"
 	"github.com/c16a/hermes/lib/persistence"
 	"github.com/eclipse/paho.golang/packets"
-	"net"
+	"io"
 	"sync"
 )
 
@@ -42,7 +42,17 @@ func NewServerContext(config *config.Config) (*ServerContext, error) {
 	}, nil
 }
 
-func (ctx *ServerContext) AddClient(conn net.Conn, connect *packets.Connect) (code byte, sessionExists bool) {
+func (ctx *ServerContext) AddClient(conn io.Writer, connect *packets.Connect) (code byte, sessionExists bool, maxQos byte) {
+	maxQos = ctx.config.Server.MaxQos
+
+	if ctx.authProvider != nil {
+		if authError := ctx.authProvider.Validate(connect.Username, string(connect.Password)); authError != nil {
+			code = 135
+			sessionExists = false
+			return
+		}
+	}
+
 	clientExists := ctx.checkForClient(connect.ClientID)
 	clientRequestForFreshSession := connect.CleanStart
 	if clientExists {
@@ -52,33 +62,36 @@ func (ctx *ServerContext) AddClient(conn net.Conn, connect *packets.Connect) (co
 			ctx.doAddClient(conn, connect)
 		} else {
 			ctx.doUpdateClient(connect.ClientID, conn)
-			fmt.Println("Fetching offline messages")
-			_ = ctx.sendMissedMessages(connect.ClientID, conn)
+			if ctx.persistenceProvider != nil {
+				_ = ctx.sendMissedMessages(connect.ClientID, conn)
+			}
 		}
 	} else {
 		ctx.doAddClient(conn, connect)
 	}
-	return 0, clientExists && !clientRequestForFreshSession
+	code = 0
+	sessionExists = clientExists && !clientRequestForFreshSession
+	return
 }
 
-func (ctx *ServerContext) doAddClient(conn net.Conn, connect *packets.Connect) {
+func (ctx *ServerContext) doAddClient(conn io.Writer, connect *packets.Connect) {
 	newClient := &ConnectedClient{
-		Connection:   conn,
-		ClientID:     connect.ClientID,
-		IsClean:      connect.CleanStart,
-		IsConnected:  true,
-		Subscription: make(map[string]packets.SubOptions, 0),
+		Connection:    conn,
+		ClientID:      connect.ClientID,
+		IsClean:       connect.CleanStart,
+		IsConnected:   true,
+		Subscriptions: make(map[string]packets.SubOptions, 0),
 	}
 	ctx.mu.Lock()
 	ctx.connectedClientsMap[connect.ClientID] = newClient
 	ctx.mu.Unlock()
 }
 
-func (ctx *ServerContext) doUpdateClient(clientID string, conn net.Conn) {
+func (ctx *ServerContext) doUpdateClient(clientID string, conn io.Writer) {
 	ctx.connectedClientsMap[clientID].Connection = conn
 }
 
-func (ctx *ServerContext) Disconnect(conn net.Conn, disconnect *packets.Disconnect) {
+func (ctx *ServerContext) Disconnect(conn io.Writer, disconnect *packets.Disconnect) {
 	var clientIdToRemove string
 	shouldDelete := false
 	for clientID, client := range ctx.connectedClientsMap {
@@ -101,32 +114,29 @@ func (ctx *ServerContext) Disconnect(conn net.Conn, disconnect *packets.Disconne
 func (ctx *ServerContext) Publish(publish *packets.Publish) {
 	for _, client := range ctx.connectedClientsMap {
 		topicToTarget := publish.Topic
-		if _, ok := client.Subscription[topicToTarget]; ok {
-			if !client.IsConnected {
-				if !client.IsClean {
-					// save for offline usage
-					fmt.Printf("Saving for offline delivery since %s is offline\n", client.ClientID)
-					saveError := ctx.persistenceProvider.SaveForOfflineDelivery(client.ClientID, publish)
-					if saveError != nil {
-						fmt.Println("Error while saving message for offline delivery")
-					}
+		if _, ok := client.Subscriptions[topicToTarget]; ok {
+			if !client.IsConnected && !client.IsClean {
+				// save for offline usage
+				if ctx.persistenceProvider != nil {
+					ctx.persistenceProvider.SaveForOfflineDelivery(client.ClientID, publish)
 				}
-				continue
 			}
-			_, err := publish.WriteTo(client.Connection)
-			if err != nil {
-				fmt.Println(err)
+			if client.IsConnected {
+				publish.WriteTo(client.Connection)
 			}
 		}
 	}
 }
 
-func (ctx *ServerContext) Subscribe(conn net.Conn, subscribe *packets.Subscribe) []byte {
+func (ctx *ServerContext) Subscribe(conn io.Writer, subscribe *packets.Subscribe) []byte {
+	ctx.mu.Lock()
+	defer ctx.mu.Unlock()
+
 	var subAckBytes []byte
 	for _, client := range ctx.connectedClientsMap {
 		if conn == client.Connection {
 			for topic, options := range subscribe.Subscriptions {
-				client.Subscription[topic] = options
+				client.Subscriptions[topic] = options
 				var subAckByte byte
 
 				if options.QoS > ctx.config.Server.MaxQos {
@@ -153,14 +163,14 @@ func (ctx *ServerContext) Subscribe(conn net.Conn, subscribe *packets.Subscribe)
 	return subAckBytes
 }
 
-func (ctx *ServerContext) Unsubscribe(conn net.Conn, unsubscribe *packets.Unsubscribe) []byte {
+func (ctx *ServerContext) Unsubscribe(conn io.Writer, unsubscribe *packets.Unsubscribe) []byte {
 	client, _ := ctx.getClientForConnection(conn)
 
 	var unsubAckBytes []byte
 	for _, topic := range unsubscribe.Topics {
-		_, ok := client.Subscription[topic]
+		_, ok := client.Subscriptions[topic]
 		if ok {
-			delete(client.Subscription, topic)
+			delete(client.Subscriptions, topic)
 			unsubAckBytes = append(unsubAckBytes, packets.UnsubackSuccess)
 		} else {
 			unsubAckBytes = append(unsubAckBytes, packets.UnsubackNoSubscriptionFound)
@@ -181,7 +191,10 @@ func (ctx *ServerContext) checkForClient(clientID string) bool {
 	return false
 }
 
-func (ctx *ServerContext) getClientForConnection(conn net.Conn) (*ConnectedClient, error) {
+func (ctx *ServerContext) getClientForConnection(conn io.Writer) (*ConnectedClient, error) {
+	ctx.mu.RLock()
+	defer ctx.mu.RUnlock()
+
 	for _, client := range ctx.connectedClientsMap {
 		if conn == client.Connection {
 			return client, nil
@@ -190,27 +203,24 @@ func (ctx *ServerContext) getClientForConnection(conn net.Conn) (*ConnectedClien
 	return nil, errors.New("client not found for connection")
 }
 
-func (ctx *ServerContext) sendMissedMessages(clientId string, conn net.Conn) error {
+func (ctx *ServerContext) sendMissedMessages(clientId string, conn io.Writer) error {
 	missedMessages, err := ctx.persistenceProvider.GetMissedMessages(clientId)
 	if err != nil {
 		return err
 	}
 
 	for _, msg := range missedMessages {
-		_, writeErr := msg.WriteTo(conn)
-		if writeErr != nil {
-			fmt.Println("Failed to send missed message: ", writeErr.Error())
-		}
+		msg.WriteTo(conn)
 	}
 	return nil
 }
 
 // ConnectedClient stores the information about a currently connected client
 type ConnectedClient struct {
-	Connection   net.Conn
-	ClientID     string
-	ClientGroup  string
-	IsConnected  bool
-	IsClean      bool
-	Subscription map[string]packets.SubOptions
+	Connection    io.Writer
+	ClientID      string
+	ClientGroup   string
+	IsConnected   bool
+	IsClean       bool
+	Subscriptions map[string]packets.SubOptions
 }
