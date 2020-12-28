@@ -2,24 +2,23 @@ package lib
 
 import (
 	"fmt"
-	"github.com/c16a/hermes/lib/auth"
 	"github.com/eclipse/paho.golang/packets"
 	"github.com/eclipse/paho.golang/paho"
 	uuid "github.com/satori/go.uuid"
-	"net"
+	"io"
 )
 
 type MqttHandler struct {
-	authProvider auth.AuthorisationProvider
+	base MqttBase
 }
 
-func (handler *MqttHandler) Handle(conn net.Conn, ctx *ServerContext) {
-	cPacket, err := packets.ReadPacket(conn)
+func (handler *MqttHandler) Handle(readWriter io.ReadWriter) {
+	cPacket, err := packets.ReadPacket(readWriter)
 	if err != nil {
 		return
 	}
 
-	var packetHandler func(net.Conn, *packets.ControlPacket, *ServerContext)
+	var packetHandler func(io.ReadWriter, *packets.ControlPacket, MqttBase)
 
 	switch cPacket.Type {
 	case packets.CONNECT:
@@ -43,12 +42,12 @@ func (handler *MqttHandler) Handle(conn net.Conn, ctx *ServerContext) {
 		return
 	}
 
-	packetHandler(conn, cPacket, ctx)
+	packetHandler(readWriter, cPacket, handler.base)
 
 	return
 }
 
-func handleConnect(conn net.Conn, controlPacket *packets.ControlPacket, ctx *ServerContext) {
+func handleConnect(readWriter io.ReadWriter, controlPacket *packets.ControlPacket, base MqttBase) {
 	connectPacket, ok := controlPacket.Content.(*packets.Connect)
 	if !ok {
 		return
@@ -58,62 +57,47 @@ func handleConnect(conn net.Conn, controlPacket *packets.ControlPacket, ctx *Ser
 		connectPacket.ClientID = uuid.NewV4().String()
 	}
 
+	reasonCode, sessionPresent, maxQos := base.AddClient(readWriter, connectPacket)
+
 	connAckPacket := packets.Connack{
+		ReasonCode:     reasonCode,
+		SessionPresent: sessionPresent,
 		Properties: &packets.Properties{
 			AssignedClientID: connectPacket.ClientID,
-			MaximumQOS:       paho.Byte(ctx.config.Server.MaxQos),
+			MaximumQOS:       paho.Byte(maxQos),
 		},
 	}
 
-	var reasonCode byte
-	var sessionPresent bool
-	var authError error
-
-	if ctx.authProvider != nil {
-		authError = ctx.authProvider.Validate(connectPacket.Username, string(connectPacket.Password))
-		if authError != nil {
-			reasonCode = 135
-			sessionPresent = false
-		}
-	}
-
-	if authError == nil {
-		reasonCode, sessionPresent = ctx.AddClient(conn, connectPacket)
-	}
-
-	connAckPacket.ReasonCode = reasonCode
-	connAckPacket.SessionPresent = sessionPresent
-
-	_, err := connAckPacket.WriteTo(conn)
+	_, err := connAckPacket.WriteTo(readWriter)
 	if err != nil {
 		return
 	}
 }
 
-func handleDisconnect(conn net.Conn, controlPacket *packets.ControlPacket, ctx *ServerContext) {
+func handleDisconnect(readWriter io.ReadWriter, controlPacket *packets.ControlPacket, base MqttBase) {
 	disconnectPacket, ok := controlPacket.Content.(*packets.Disconnect)
 	if !ok {
 		return
 	}
 
-	ctx.Disconnect(conn, disconnectPacket)
+	base.Disconnect(readWriter, disconnectPacket)
 }
 
-func handlePingRequest(conn net.Conn, controlPacket *packets.ControlPacket, ctx *ServerContext) {
+func handlePingRequest(readWriter io.ReadWriter, controlPacket *packets.ControlPacket, base MqttBase) {
 	_, ok := controlPacket.Content.(*packets.Pingreq)
 	if !ok {
 		return
 	}
 
 	pingResponsePacket := packets.Pingresp{}
-	_, err := pingResponsePacket.WriteTo(conn)
+	_, err := pingResponsePacket.WriteTo(readWriter)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 }
 
-func handlePublish(conn net.Conn, controlPacket *packets.ControlPacket, ctx *ServerContext) {
+func handlePublish(readWriter io.ReadWriter, controlPacket *packets.ControlPacket, base MqttBase) {
 	publishPacket, ok := controlPacket.Content.(*packets.Publish)
 	if !ok {
 		return
@@ -121,32 +105,32 @@ func handlePublish(conn net.Conn, controlPacket *packets.ControlPacket, ctx *Ser
 
 	switch publishPacket.QoS {
 	case 0:
-		handlePubQos0(publishPacket, ctx)
+		handlePubQos0(publishPacket, base)
 		break
 	case 1:
-		handlePubQoS1(conn, publishPacket, ctx)
+		handlePubQoS1(readWriter, publishPacket, base)
 	}
 
 	return
 }
 
-func handlePubQos0(publishPacket *packets.Publish, ctx *ServerContext) {
-	ctx.Publish(publishPacket)
+func handlePubQos0(publishPacket *packets.Publish, base MqttBase) {
+	base.Publish(publishPacket)
 }
 
-func handlePubQoS1(conn net.Conn, publishPacket *packets.Publish, ctx *ServerContext) {
+func handlePubQoS1(readWriter io.ReadWriter, publishPacket *packets.Publish, base MqttBase) {
 	pubAck := packets.Puback{
 		ReasonCode: packets.PubackSuccess,
 		PacketID:   publishPacket.PacketID,
 	}
-	_, err := pubAck.WriteTo(conn)
+	_, err := pubAck.WriteTo(readWriter)
 	if err != nil {
 		return
 	}
-	ctx.Publish(publishPacket)
+	base.Publish(publishPacket)
 }
 
-func handleSubscribe(conn net.Conn, controlPacket *packets.ControlPacket, ctx *ServerContext) {
+func handleSubscribe(readWriter io.ReadWriter, controlPacket *packets.ControlPacket, base MqttBase) {
 	subscribePacket, ok := controlPacket.Content.(*packets.Subscribe)
 	if !ok {
 		return
@@ -154,16 +138,16 @@ func handleSubscribe(conn net.Conn, controlPacket *packets.ControlPacket, ctx *S
 
 	subAck := packets.Suback{
 		PacketID: subscribePacket.PacketID,
-		Reasons:  ctx.Subscribe(conn, subscribePacket),
+		Reasons:  base.Subscribe(readWriter, subscribePacket),
 	}
-	_, err := subAck.WriteTo(conn)
+	_, err := subAck.WriteTo(readWriter)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 }
 
-func handleUnsubscribe(conn net.Conn, controlPacket *packets.ControlPacket, ctx *ServerContext) {
+func handleUnsubscribe(readWriter io.ReadWriter, controlPacket *packets.ControlPacket, base MqttBase) {
 	unsubscribePacket, ok := controlPacket.Content.(*packets.Unsubscribe)
 	if !ok {
 		return
@@ -171,9 +155,9 @@ func handleUnsubscribe(conn net.Conn, controlPacket *packets.ControlPacket, ctx 
 
 	unsubAck := packets.Unsuback{
 		PacketID: unsubscribePacket.PacketID,
-		Reasons:  ctx.Unsubscribe(conn, unsubscribePacket),
+		Reasons:  base.Unsubscribe(readWriter, unsubscribePacket),
 	}
-	_, err := unsubAck.WriteTo(conn)
+	_, err := unsubAck.WriteTo(readWriter)
 	if err != nil {
 		fmt.Println(err)
 		return

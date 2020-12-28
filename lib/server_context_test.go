@@ -1,6 +1,7 @@
 package lib
 
 import (
+	"errors"
 	"github.com/c16a/hermes/lib/auth"
 	"github.com/c16a/hermes/lib/config"
 	"github.com/c16a/hermes/lib/persistence"
@@ -56,13 +57,42 @@ func TestServerContext_AddClient(t *testing.T) {
 		args              args
 		wantCode          byte
 		wantSessionExists bool
+		wantMaxQos        byte
 	}{
+		{
+			"Auth failed",
+			fields{
+				make(map[string]*ConnectedClient, 0),
+				&sync.RWMutex{},
+				&config.Config{
+					Server: &config.Server{
+						MaxQos: 2,
+					},
+				},
+				&MockAuthProvider{throwError: true},
+				nil,
+			},
+			args{
+				ioutil.Discard,
+				&packets.Connect{
+					CleanStart: true,
+					ClientID:   "abcd",
+				},
+			},
+			135,
+			false,
+			2,
+		},
 		{
 			"Adding fresh client",
 			fields{
 				make(map[string]*ConnectedClient, 0),
 				&sync.RWMutex{},
-				&config.Config{},
+				&config.Config{
+					Server: &config.Server{
+						MaxQos: 2,
+					},
+				},
 				nil,
 				nil,
 			},
@@ -75,6 +105,7 @@ func TestServerContext_AddClient(t *testing.T) {
 			},
 			0,
 			false,
+			2,
 		},
 		{
 			"Existing client asked to revive session (no persistence)",
@@ -86,7 +117,11 @@ func TestServerContext_AddClient(t *testing.T) {
 					},
 				},
 				&sync.RWMutex{},
-				&config.Config{},
+				&config.Config{
+					Server: &config.Server{
+						MaxQos: 2,
+					},
+				},
 				nil,
 				nil,
 			},
@@ -99,6 +134,7 @@ func TestServerContext_AddClient(t *testing.T) {
 			},
 			0,
 			true,
+			2,
 		},
 		{
 			"Existing client asked to revive session (with persistence)",
@@ -110,7 +146,11 @@ func TestServerContext_AddClient(t *testing.T) {
 					},
 				},
 				&sync.RWMutex{},
-				&config.Config{},
+				&config.Config{
+					Server: &config.Server{
+						MaxQos: 2,
+					},
+				},
 				nil,
 				&MockPersistenceProvider{},
 			},
@@ -123,6 +163,7 @@ func TestServerContext_AddClient(t *testing.T) {
 			},
 			0,
 			true,
+			2,
 		},
 		{
 			"Existing client asked for fresh session",
@@ -134,7 +175,11 @@ func TestServerContext_AddClient(t *testing.T) {
 					},
 				},
 				&sync.RWMutex{},
-				&config.Config{},
+				&config.Config{
+					Server: &config.Server{
+						MaxQos: 2,
+					},
+				},
 				nil,
 				nil,
 			},
@@ -147,6 +192,7 @@ func TestServerContext_AddClient(t *testing.T) {
 			},
 			0,
 			false,
+			2,
 		},
 	}
 	for _, tt := range tests {
@@ -158,12 +204,15 @@ func TestServerContext_AddClient(t *testing.T) {
 				authProvider:        tt.fields.authProvider,
 				persistenceProvider: tt.fields.persistenceProvider,
 			}
-			gotCode, gotSessionExists := ctx.AddClient(tt.args.conn, tt.args.connect)
+			gotCode, gotSessionExists, gotMaxQos := ctx.AddClient(tt.args.conn, tt.args.connect)
 			if gotCode != tt.wantCode {
 				t.Errorf("AddClient() gotCode = %v, want %v", gotCode, tt.wantCode)
 			}
 			if gotSessionExists != tt.wantSessionExists {
 				t.Errorf("AddClient() gotSessionExists = %v, want %v", gotSessionExists, tt.wantSessionExists)
+			}
+			if gotMaxQos != tt.wantMaxQos {
+				t.Errorf("AddClient() gotSessionExists = %v, want %v", gotMaxQos, tt.wantMaxQos)
 			}
 		})
 	}
@@ -600,4 +649,15 @@ func (m *MockPersistenceProvider) GetMissedMessages(clientId string) ([]*packets
 			Payload: []byte("Hello World"),
 		},
 	}, nil
+}
+
+type MockAuthProvider struct {
+	throwError bool
+}
+
+func (m *MockAuthProvider) Validate(username string, password string) error {
+	if m.throwError {
+		return errors.New("some random error")
+	}
+	return nil
 }

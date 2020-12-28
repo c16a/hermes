@@ -42,7 +42,17 @@ func NewServerContext(config *config.Config) (*ServerContext, error) {
 	}, nil
 }
 
-func (ctx *ServerContext) AddClient(conn io.Writer, connect *packets.Connect) (code byte, sessionExists bool) {
+func (ctx *ServerContext) AddClient(conn io.Writer, connect *packets.Connect) (code byte, sessionExists bool, maxQos byte) {
+	maxQos = ctx.config.Server.MaxQos
+
+	if ctx.authProvider != nil {
+		if authError := ctx.authProvider.Validate(connect.Username, string(connect.Password)); authError != nil {
+			code = 135
+			sessionExists = false
+			return
+		}
+	}
+
 	clientExists := ctx.checkForClient(connect.ClientID)
 	clientRequestForFreshSession := connect.CleanStart
 	if clientExists {
@@ -59,7 +69,9 @@ func (ctx *ServerContext) AddClient(conn io.Writer, connect *packets.Connect) (c
 	} else {
 		ctx.doAddClient(conn, connect)
 	}
-	return 0, clientExists && !clientRequestForFreshSession
+	code = 0
+	sessionExists = clientExists && !clientRequestForFreshSession
+	return
 }
 
 func (ctx *ServerContext) doAddClient(conn io.Writer, connect *packets.Connect) {

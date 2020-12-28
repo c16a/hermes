@@ -3,11 +3,9 @@ package lib
 import "net"
 
 func HandleMqttConnection(conn net.Conn, ctx *ServerContext) {
-	handler := &MqttHandler{
-		authProvider: ctx.authProvider,
-	}
+	handler := &MqttHandler{base: ctx}
 
 	for true {
-		handler.Handle(conn, ctx)
+		handler.Handle(conn)
 	}
 }
