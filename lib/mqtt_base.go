@@ -11,4 +11,7 @@ type MqttBase interface {
 	Publish(*packets.Publish)
 	Subscribe(io.Writer, *packets.Subscribe) []byte
 	Unsubscribe(io.Writer, *packets.Unsubscribe) []byte
+
+	ReservePacketID(io.Writer, *packets.Publish) error
+	FreePacketID(io.Writer, *packets.Pubrel) error
 }

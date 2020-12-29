@@ -13,7 +13,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ ubuntu-20.04, windows-latest, macOS-11.0 ]
+        os: [ ubuntu-20.04 ]
 
     steps:
       - name: Set up Go 1.x
@@ -29,7 +29,10 @@ jobs:
 
   build:
     name: Build
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ ubuntu-20.04 ]
     steps:
 
       - name: Set up Go 1.x

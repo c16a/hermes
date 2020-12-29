@@ -638,6 +638,18 @@ func TestServerContext_Unsubscribe(t *testing.T) {
 type MockPersistenceProvider struct {
 }
 
+func (m *MockPersistenceProvider) ReservePacketID(clientID string, packetID uint16) error {
+	return nil
+}
+
+func (m *MockPersistenceProvider) FreePacketID(clientID string, packetID uint16) error {
+	return nil
+}
+
+func (m *MockPersistenceProvider) CheckForPacketIdReuse(clientID string, packetID uint16) (bool, error) {
+	return false, nil
+}
+
 func (m *MockPersistenceProvider) SaveForOfflineDelivery(clientId string, publish *packets.Publish) error {
 	return nil
 }
