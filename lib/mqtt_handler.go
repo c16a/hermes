@@ -27,6 +27,8 @@ func (handler *MqttHandler) Handle(readWriter io.ReadWriter) {
 	case packets.PUBLISH:
 		packetHandler = handlePublish
 		break
+	case packets.PUBREL:
+		packetHandler = handlePubRel
 	case packets.SUBSCRIBE:
 		packetHandler = handleSubscribe
 		break
@@ -109,6 +111,9 @@ func handlePublish(readWriter io.ReadWriter, controlPacket *packets.ControlPacke
 		break
 	case 1:
 		handlePubQoS1(readWriter, publishPacket, base)
+		break
+	case 2:
+		handlePubQos2(readWriter, publishPacket, base)
 	}
 
 	return
@@ -128,6 +133,42 @@ func handlePubQoS1(readWriter io.ReadWriter, publishPacket *packets.Publish, bas
 		return
 	}
 	base.Publish(publishPacket)
+}
+
+func handlePubQos2(readWriter io.ReadWriter, publishPacket *packets.Publish, base MqttBase) {
+	pubReceived := packets.Pubrec{
+		ReasonCode: packets.PubrecSuccess,
+		PacketID:   publishPacket.PacketID,
+	}
+
+	err := base.ReservePacketID(readWriter, publishPacket)
+	if err != nil {
+		pubReceived.ReasonCode = packets.PubrecImplementationSpecificError
+	}
+
+	_, err = pubReceived.WriteTo(readWriter)
+	if err != nil {
+		return
+	}
+	base.Publish(publishPacket)
+}
+
+func handlePubRel(readWriter io.ReadWriter, controlPacket *packets.ControlPacket, base MqttBase) {
+	pubRelPacket, ok := controlPacket.Content.(*packets.Pubrel)
+	if !ok {
+		return
+	}
+
+	pubComplete := packets.Pubcomp{
+		ReasonCode: packets.PubrecSuccess,
+		PacketID:   pubRelPacket.PacketID,
+	}
+
+	_ = base.FreePacketID(readWriter, pubRelPacket)
+	_, err := pubComplete.WriteTo(readWriter)
+	if err != nil {
+		return
+	}
 }
 
 func handleSubscribe(readWriter io.ReadWriter, controlPacket *packets.ControlPacket, base MqttBase) {

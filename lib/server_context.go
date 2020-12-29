@@ -74,23 +74,6 @@ func (ctx *ServerContext) AddClient(conn io.Writer, connect *packets.Connect) (c
 	return
 }
 
-func (ctx *ServerContext) doAddClient(conn io.Writer, connect *packets.Connect) {
-	newClient := &ConnectedClient{
-		Connection:    conn,
-		ClientID:      connect.ClientID,
-		IsClean:       connect.CleanStart,
-		IsConnected:   true,
-		Subscriptions: make(map[string]packets.SubOptions, 0),
-	}
-	ctx.mu.Lock()
-	ctx.connectedClientsMap[connect.ClientID] = newClient
-	ctx.mu.Unlock()
-}
-
-func (ctx *ServerContext) doUpdateClient(clientID string, conn io.Writer) {
-	ctx.connectedClientsMap[clientID].Connection = conn
-}
-
 func (ctx *ServerContext) Disconnect(conn io.Writer, disconnect *packets.Disconnect) {
 	var clientIdToRemove string
 	shouldDelete := false
@@ -179,6 +162,22 @@ func (ctx *ServerContext) Unsubscribe(conn io.Writer, unsubscribe *packets.Unsub
 	return unsubAckBytes
 }
 
+func (ctx *ServerContext) ReservePacketID(conn io.Writer, publish *packets.Publish) error {
+	client, err := ctx.getClientForConnection(conn)
+	if err != nil {
+		return err
+	}
+	return ctx.persistenceProvider.ReservePacketID(client.ClientID, publish.PacketID)
+}
+
+func (ctx *ServerContext) FreePacketID(conn io.Writer, pubRel *packets.Pubrel) error {
+	client, err := ctx.getClientForConnection(conn)
+	if err != nil {
+		return err
+	}
+	return ctx.persistenceProvider.FreePacketID(client.ClientID, pubRel.PacketID)
+}
+
 func (ctx *ServerContext) checkForClient(clientID string) bool {
 	ctx.mu.RLock()
 	defer ctx.mu.RUnlock()
@@ -213,6 +212,23 @@ func (ctx *ServerContext) sendMissedMessages(clientId string, conn io.Writer) er
 		msg.WriteTo(conn)
 	}
 	return nil
+}
+
+func (ctx *ServerContext) doAddClient(conn io.Writer, connect *packets.Connect) {
+	newClient := &ConnectedClient{
+		Connection:    conn,
+		ClientID:      connect.ClientID,
+		IsClean:       connect.CleanStart,
+		IsConnected:   true,
+		Subscriptions: make(map[string]packets.SubOptions, 0),
+	}
+	ctx.mu.Lock()
+	ctx.connectedClientsMap[connect.ClientID] = newClient
+	ctx.mu.Unlock()
+}
+
+func (ctx *ServerContext) doUpdateClient(clientID string, conn io.Writer) {
+	ctx.connectedClientsMap[clientID].Connection = conn
 }
 
 // ConnectedClient stores the information about a currently connected client

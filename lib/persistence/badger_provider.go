@@ -12,6 +12,10 @@ import (
 	uuid "github.com/satori/go.uuid"
 )
 
+const (
+	PacketReserved byte = 1
+)
+
 type BadgerProvider struct {
 	db *badger.DB
 }
@@ -56,14 +60,14 @@ func (b *BadgerProvider) SaveForOfflineDelivery(clientId string, publish *packet
 	})
 }
 
-func (b *BadgerProvider) GetMissedMessages(clientId string) ([]*packets.Publish, error) {
+func (b *BadgerProvider) GetMissedMessages(clientID string) ([]*packets.Publish, error) {
 	messages := make([]*packets.Publish, 0)
 
 	err := b.db.View(func(txn *badger.Txn) error {
 		it := txn.NewIterator(badger.DefaultIteratorOptions)
 		defer it.Close()
 
-		prefix := []byte(clientId)
+		prefix := []byte(clientID)
 		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 			item := it.Item()
 			if err := item.Value(func(val []byte) error {
@@ -80,6 +84,40 @@ func (b *BadgerProvider) GetMissedMessages(clientId string) ([]*packets.Publish,
 		return nil
 	})
 	return messages, err
+}
+
+func (b *BadgerProvider) ReservePacketID(clientID string, packetID uint16) error {
+	return b.db.Update(func(txn *badger.Txn) error {
+		key := fmt.Sprintf("packet:%s:%d", clientID, packetID)
+		return txn.Set([]byte(key), []byte{PacketReserved})
+	})
+}
+
+func (b *BadgerProvider) FreePacketID(clientID string, packetID uint16) error {
+	return b.db.Update(func(txn *badger.Txn) error {
+		key := fmt.Sprintf("packet:%s:%d", clientID, packetID)
+		return txn.Delete([]byte(key))
+	})
+}
+
+func (b *BadgerProvider) CheckForPacketIdReuse(clientID string, packetID uint16) (bool, error) {
+	reuseFlag := false
+	err := b.db.View(func(txn *badger.Txn) error {
+		key := fmt.Sprintf("packet:%s:%d", clientID, packetID)
+		item, err := txn.Get([]byte(key))
+		if err != nil {
+			return err
+		}
+		return item.Value(func(val []byte) error {
+			if val[0] == PacketReserved {
+				reuseFlag = true
+			} else {
+				return errors.New("some weird error")
+			}
+			return nil
+		})
+	})
+	return reuseFlag, err
 }
 
 func getBytes(bundle interface{}) ([]byte, error) {

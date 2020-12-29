@@ -47,7 +47,7 @@ repositories {
 
 ```java
 var persistence = new MemoryPersistence();
-var client = new MqttClient(broker, clientId, persistence);
+var client = new MqttClient(broker, clientID, persistence);
 var connOpts = new MqttConnectionOptions();
 client.connect(connOpts);
 ```
@@ -102,9 +102,9 @@ Inbound adapters allow Spring applications to subscribe to topics and respond to
 @Bean
 public IntegrationFlow mqttInbound() {
     var broker = "tcp://localhost:1883";
-    var clientId = "client-id";
+    var clientID = "client-id";
     var topic = "my-topic";
-    var adapter = new MqttPahoMessageDrivenChannelAdapter(broker, clientId, topic); 
+    var adapter = new MqttPahoMessageDrivenChannelAdapter(broker, clientID, topic); 
     return IntegrationFlows.from(adapter).handle(m -> handleMsg(m)).get();
 }
 
@@ -118,8 +118,8 @@ Inbound adapters allow Spring applications to publish MQTT messages onto topics.
 @Bean
 public IntegrationFlow mqttOutboundFlow() {
     var broker = "tcp://localhost:1883";
-    var clientId = "client-id";
-    return f -> f.handle(new MqttPahoMessageHandler(broker, clientId));
+    var clientID = "client-id";
+    return f -> f.handle(new MqttPahoMessageHandler(broker, clientID));
 }
 ```
 
