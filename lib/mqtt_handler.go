@@ -17,6 +17,7 @@ func (handler *MqttHandler) Handle(readWriter io.ReadWriter) {
 	if err != nil {
 		return
 	}
+	LogControlPacket(cPacket)
 
 	var packetHandler func(io.ReadWriter, *packets.ControlPacket, MqttBase)
 
@@ -70,6 +71,7 @@ func handleConnect(readWriter io.ReadWriter, controlPacket *packets.ControlPacke
 		},
 	}
 
+	LogOutgoingPacket(packets.CONNACK)
 	_, err := connAckPacket.WriteTo(readWriter)
 	if err != nil {
 		return
@@ -92,6 +94,8 @@ func handlePingRequest(readWriter io.ReadWriter, controlPacket *packets.ControlP
 	}
 
 	pingResponsePacket := packets.Pingresp{}
+
+	LogOutgoingPacket(packets.PINGRESP)
 	_, err := pingResponsePacket.WriteTo(readWriter)
 	if err != nil {
 		fmt.Println(err)
@@ -128,6 +132,8 @@ func handlePubQoS1(readWriter io.ReadWriter, publishPacket *packets.Publish, bas
 		ReasonCode: packets.PubackSuccess,
 		PacketID:   publishPacket.PacketID,
 	}
+
+	LogOutgoingPacket(packets.PUBACK)
 	_, err := pubAck.WriteTo(readWriter)
 	if err != nil {
 		return
@@ -146,6 +152,7 @@ func handlePubQos2(readWriter io.ReadWriter, publishPacket *packets.Publish, bas
 		pubReceived.ReasonCode = packets.PubrecImplementationSpecificError
 	}
 
+	LogOutgoingPacket(packets.PUBREC)
 	_, err = pubReceived.WriteTo(readWriter)
 	if err != nil {
 		return
@@ -165,6 +172,8 @@ func handlePubRel(readWriter io.ReadWriter, controlPacket *packets.ControlPacket
 	}
 
 	_ = base.FreePacketID(readWriter, pubRelPacket)
+
+	LogOutgoingPacket(packets.PUBCOMP)
 	_, err := pubComplete.WriteTo(readWriter)
 	if err != nil {
 		return
@@ -181,6 +190,8 @@ func handleSubscribe(readWriter io.ReadWriter, controlPacket *packets.ControlPac
 		PacketID: subscribePacket.PacketID,
 		Reasons:  base.Subscribe(readWriter, subscribePacket),
 	}
+
+	LogOutgoingPacket(packets.SUBACK)
 	_, err := subAck.WriteTo(readWriter)
 	if err != nil {
 		fmt.Println(err)
@@ -198,6 +209,8 @@ func handleUnsubscribe(readWriter io.ReadWriter, controlPacket *packets.ControlP
 		PacketID: unsubscribePacket.PacketID,
 		Reasons:  base.Unsubscribe(readWriter, unsubscribePacket),
 	}
+
+	LogOutgoingPacket(packets.UNSUBACK)
 	_, err := unsubAck.WriteTo(readWriter)
 	if err != nil {
 		fmt.Println(err)
