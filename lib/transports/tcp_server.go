@@ -1,13 +1,14 @@
-package lib
+package transports
 
 import (
 	"crypto/tls"
 	"fmt"
 	"github.com/c16a/hermes/lib/config"
+	"github.com/c16a/hermes/lib/mqtt"
 	"net"
 )
 
-func StartTcpServer(serverConfig *config.Config, ctx *ServerContext) {
+func StartTcpServer(serverConfig *config.Config, ctx *mqtt.ServerContext) {
 	var listener net.Listener
 	var listenerErr error
 
@@ -41,6 +42,6 @@ func StartTcpServer(serverConfig *config.Config, ctx *ServerContext) {
 		if err != nil {
 			return
 		}
-		go HandleMqttConnection(conn, ctx)
+		go mqtt.HandleMqttConnection(conn, ctx)
 	}
 }

@@ -1,8 +1,9 @@
 package main
 
 import (
-	"github.com/c16a/hermes/lib"
 	"github.com/c16a/hermes/lib/config"
+	"github.com/c16a/hermes/lib/mqtt"
+	"github.com/c16a/hermes/lib/transports"
 	"log"
 	"os"
 )
@@ -16,11 +17,11 @@ func main() {
 		log.Fatal(err)
 	}
 
-	ctx, err := lib.NewServerContext(serverConfig)
+	ctx, err := mqtt.NewServerContext(serverConfig)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	go lib.StartWebSocketServer(serverConfig, ctx)
-	lib.StartTcpServer(serverConfig, ctx)
+	go transports.StartWebSocketServer(serverConfig, ctx)
+	transports.StartTcpServer(serverConfig, ctx)
 }
