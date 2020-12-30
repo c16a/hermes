@@ -10,6 +10,7 @@ import (
 	"github.com/dgraph-io/badger/v2/options"
 	"github.com/eclipse/paho.golang/packets"
 	uuid "github.com/satori/go.uuid"
+	"time"
 )
 
 const (
@@ -56,7 +57,8 @@ func (b *BadgerProvider) SaveForOfflineDelivery(clientId string, publish *packet
 			return err
 		}
 		key := fmt.Sprintf("%s:%s", clientId, uuid.NewV4().String())
-		return txn.Set([]byte(key), payloadBytes)
+		entry := badger.NewEntry([]byte(key), payloadBytes).WithTTL(time.Duration(int(*publish.Properties.MessageExpiry)) * time.Second)
+		return txn.SetEntry(entry)
 	})
 }
 
@@ -66,7 +68,6 @@ func (b *BadgerProvider) GetMissedMessages(clientID string) ([]*packets.Publish,
 	err := b.db.View(func(txn *badger.Txn) error {
 		it := txn.NewIterator(badger.DefaultIteratorOptions)
 		defer it.Close()
-
 		prefix := []byte(clientID)
 		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 			item := it.Item()
