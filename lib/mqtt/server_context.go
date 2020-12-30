@@ -1,15 +1,19 @@
-package lib
+package mqtt
 
 import (
 	"errors"
 	"fmt"
 	"github.com/c16a/hermes/lib/auth"
 	"github.com/c16a/hermes/lib/config"
+	"github.com/c16a/hermes/lib/logging"
 	"github.com/c16a/hermes/lib/persistence"
+	"github.com/c16a/hermes/lib/utils"
 	"github.com/eclipse/paho.golang/packets"
 	log "github.com/sirupsen/logrus"
 	"io"
+	"math/rand"
 	"sync"
+	"time"
 )
 
 // ServerContext stores the state of the cluster node
@@ -50,10 +54,10 @@ func (ctx *ServerContext) AddClient(conn io.Writer, connect *packets.Connect) (c
 		if authError := ctx.authProvider.Validate(connect.Username, string(connect.Password)); authError != nil {
 			code = 135
 			sessionExists = false
-			LogCustom("auth failed", log.ErrorLevel)
+			logging.LogCustom("auth failed", log.ErrorLevel)
 			return
 		}
-		LogCustom(fmt.Sprintf("auth succeeed for user: %s", connect.Username), log.DebugLevel)
+		logging.LogCustom(fmt.Sprintf("auth succeeed for user: %s", connect.Username), log.DebugLevel)
 	}
 
 	clientExists := ctx.checkForClient(connect.ClientID)
@@ -61,14 +65,14 @@ func (ctx *ServerContext) AddClient(conn io.Writer, connect *packets.Connect) (c
 	if clientExists {
 		if clientRequestForFreshSession {
 			// If client asks for fresh session, delete existing ones
-			LogCustom(fmt.Sprintf("Removing old connection for clientID: %s", connect.ClientID), log.DebugLevel)
+			logging.LogCustom(fmt.Sprintf("Removing old connection for clientID: %s", connect.ClientID), log.DebugLevel)
 			delete(ctx.connectedClientsMap, connect.ClientID)
 			ctx.doAddClient(conn, connect)
 		} else {
-			LogCustom(fmt.Sprintf("Updating clientID: %s with new connection", connect.ClientID), log.DebugLevel)
+			logging.LogCustom(fmt.Sprintf("Updating clientID: %s with new connection", connect.ClientID), log.DebugLevel)
 			ctx.doUpdateClient(connect.ClientID, conn)
 			if ctx.persistenceProvider != nil {
-				LogCustom(fmt.Sprintf("Fetching missed messages for clientID: %s", connect.ClientID), log.DebugLevel)
+				logging.LogCustom(fmt.Sprintf("Fetching missed messages for clientID: %s", connect.ClientID), log.DebugLevel)
 				_ = ctx.sendMissedMessages(connect.ClientID, conn)
 			}
 		}
@@ -93,10 +97,10 @@ func (ctx *ServerContext) Disconnect(conn io.Writer, disconnect *packets.Disconn
 	}
 
 	if shouldDelete {
-		LogCustom(fmt.Sprintf("Deleting connection for clientID: %s", clientIdToRemove), log.DebugLevel)
+		logging.LogCustom(fmt.Sprintf("Deleting connection for clientID: %s", clientIdToRemove), log.DebugLevel)
 		delete(ctx.connectedClientsMap, clientIdToRemove)
 	} else {
-		LogCustom(fmt.Sprintf("Marking connection as disconnected for clientID: %s", clientIdToRemove), log.DebugLevel)
+		logging.LogCustom(fmt.Sprintf("Marking connection as disconnected for clientID: %s", clientIdToRemove), log.DebugLevel)
 		ctx.mu.Lock()
 		ctx.connectedClientsMap[clientIdToRemove].IsConnected = false
 		ctx.mu.Unlock()
@@ -105,20 +109,53 @@ func (ctx *ServerContext) Disconnect(conn io.Writer, disconnect *packets.Disconn
 
 // Publish publishes a message to a topic
 func (ctx *ServerContext) Publish(publish *packets.Publish) {
+	var shareNameClientMap = make(map[string][]*ConnectedClient, 0)
 	for _, client := range ctx.connectedClientsMap {
 		topicToTarget := publish.Topic
-		if _, ok := client.Subscriptions[topicToTarget]; ok {
-			if !client.IsConnected && !client.IsClean {
-				// save for offline usage
-				if ctx.persistenceProvider != nil {
-					LogCustom(fmt.Sprintf("Saving offline delivery message for clientID: %s", client.ClientID), log.DebugLevel)
-					ctx.persistenceProvider.SaveForOfflineDelivery(client.ClientID, publish)
+		for topicFilter, _ := range client.Subscriptions {
+			matches, isShared, shareName := utils.TopicMatches(topicToTarget, topicFilter)
+			if matches {
+				if !isShared {
+					// non-shared subscriptions
+					if !client.IsConnected && !client.IsClean && ctx.persistenceProvider != nil {
+						// save for offline usage
+						logging.LogCustom(fmt.Sprintf("Saving offline delivery message for clientID: %s", client.ClientID), log.DebugLevel)
+						ctx.persistenceProvider.SaveForOfflineDelivery(client.ClientID, publish)
+					}
+					if client.IsConnected {
+						// send direct message
+						publish.WriteTo(client.Connection)
+					}
+				} else {
+					// share subscriptions
+					if len(shareNameClientMap[shareName]) == 0 {
+						shareNameClientMap[shareName] = make([]*ConnectedClient, 0)
+					}
+					shareNameClientMap[shareName] = append(shareNameClientMap[shareName], client)
 				}
 			}
-			if client.IsConnected {
-				publish.WriteTo(client.Connection)
+		}
+	}
+
+	for _, clients := range shareNameClientMap {
+		onlineClients := make([]*ConnectedClient, 0)
+		for _, c := range clients {
+			if c.IsConnected {
+				onlineClients = append(onlineClients, c)
 			}
 		}
+
+		var client *ConnectedClient
+		if len(clients) == 1 {
+			client = clients[0]
+		} else {
+			rand.Seed(time.Now().Unix())
+			s := rand.NewSource(time.Now().Unix())
+			r := rand.New(s) // initialize local pseudorandom generator
+			luckyClientIndex := r.Intn(len(clients))
+			client = clients[luckyClientIndex]
+		}
+		publish.WriteTo(client.Connection)
 	}
 }
 
@@ -234,7 +271,7 @@ func (ctx *ServerContext) doAddClient(conn io.Writer, connect *packets.Connect) 
 		Subscriptions: make(map[string]packets.SubOptions, 0),
 	}
 
-	LogCustom(fmt.Sprintf("Creating new connection for clientID: %s", connect.ClientID), log.DebugLevel)
+	logging.LogCustom(fmt.Sprintf("Creating new connection for clientID: %s", connect.ClientID), log.DebugLevel)
 	ctx.mu.Lock()
 	ctx.connectedClientsMap[connect.ClientID] = newClient
 	ctx.mu.Unlock()

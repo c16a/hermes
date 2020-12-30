@@ -10,6 +10,9 @@ ADD go.mod .
 RUN go mod download
 
 ADD . .
+
+RUN go test -v ./...
+
 ENV CGO_ENABLED=1
 RUN go build -ldflags="-s -w" -o binary github.com/c16a/hermes/app
 

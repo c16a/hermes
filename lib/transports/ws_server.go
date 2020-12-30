@@ -1,14 +1,15 @@
-package lib
+package transports
 
 import (
 	"fmt"
 	"github.com/c16a/hermes/lib/config"
+	"github.com/c16a/hermes/lib/mqtt"
 	"github.com/gorilla/websocket"
 	"log"
 	"net/http"
 )
 
-func StartWebSocketServer(serverConfig *config.Config, ctx *ServerContext) {
+func StartWebSocketServer(serverConfig *config.Config, ctx *mqtt.ServerContext) {
 	upgrader := websocket.Upgrader{}
 
 	httpAddr := serverConfig.Server.HttpAddress
@@ -20,7 +21,7 @@ func StartWebSocketServer(serverConfig *config.Config, ctx *ServerContext) {
 		}
 		defer c.Close()
 
-		go HandleMqttConnection(c.UnderlyingConn(), ctx)
+		go mqtt.HandleMqttConnection(c.UnderlyingConn(), ctx)
 	})
 
 	fmt.Printf("Starting Websocket server on %s\n", httpAddr)
