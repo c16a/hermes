@@ -57,7 +57,12 @@ func (b *BadgerProvider) SaveForOfflineDelivery(clientId string, publish *packet
 			return err
 		}
 		key := fmt.Sprintf("%s:%s", clientId, uuid.NewV4().String())
-		entry := badger.NewEntry([]byte(key), payloadBytes).WithTTL(time.Duration(int(*publish.Properties.MessageExpiry)) * time.Second)
+		var entry *badger.Entry
+		if publish.Properties == nil || publish.Properties.MessageExpiry == nil {
+			entry = badger.NewEntry([]byte(key), payloadBytes)
+		} else {
+			entry = badger.NewEntry([]byte(key), payloadBytes).WithTTL(time.Duration(int(*publish.Properties.MessageExpiry)) * time.Second)
+		}
 		return txn.SetEntry(entry)
 	})
 }
@@ -65,6 +70,7 @@ func (b *BadgerProvider) SaveForOfflineDelivery(clientId string, publish *packet
 func (b *BadgerProvider) GetMissedMessages(clientID string) ([]*packets.Publish, error) {
 	messages := make([]*packets.Publish, 0)
 
+	var keysToFlush [][]byte
 	err := b.db.View(func(txn *badger.Txn) error {
 		it := txn.NewIterator(badger.DefaultIteratorOptions)
 		defer it.Close()
@@ -77,6 +83,7 @@ func (b *BadgerProvider) GetMissedMessages(clientID string) ([]*packets.Publish,
 					return err
 				}
 				messages = append(messages, publish)
+				keysToFlush = append(keysToFlush, item.Key())
 				return nil
 			}); err != nil {
 				return err
@@ -84,6 +91,16 @@ func (b *BadgerProvider) GetMissedMessages(clientID string) ([]*packets.Publish,
 		}
 		return nil
 	})
+
+	if err == nil {
+		b.db.Update(func(txn *badger.Txn) error {
+			for _, key := range keysToFlush {
+				txn.Delete(key)
+			}
+			return nil
+		})
+	}
+
 	return messages, err
 }
 
