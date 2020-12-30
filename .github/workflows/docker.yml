@@ -14,7 +14,8 @@ jobs:
 
     steps:
       - name: Multi-stage build
-        run: docker build -t docker.pkg.github.com/c16a/hermes:latest -f Dockerfile .
+        working-directory: .
+        run: docker build -t docker.pkg.github.com/c16a/hermes:latest -f ./Dockerfile .
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
