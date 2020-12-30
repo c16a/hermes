@@ -1,0 +1,24 @@
+name: Docker
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build_image:
+    name: Build Image
+    runs-on: ubuntu-20.04
+
+    steps:
+      - name: Multi-stage build
+        run: docker build -t docker.pkg.github.com/c16a/hermes/hermes:latest .
+        with:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push
+        run: docker push docker.pkg.github.com/c16a/hermes/hermes:latest
+        with:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -30,6 +30,8 @@ jobs:
   build:
     name: Build
     runs-on: ${{ matrix.os }}
+    needs:
+      - test
     strategy:
       matrix:
         os: [ ubuntu-20.04 ]
