@@ -8,5 +8,5 @@ require (
 	github.com/go-ldap/ldap/v3 v3.2.4
 	github.com/gorilla/websocket v1.4.2
 	github.com/satori/go.uuid v1.2.0
-	github.com/sirupsen/logrus v1.8.0
+	github.com/sirupsen/logrus v1.8.1
 )
