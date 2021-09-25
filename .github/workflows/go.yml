@@ -98,15 +98,6 @@ jobs:
           name: hermes_windows_amd64.exe
           path: build/hermes_windows_amd64.exe
 
-      - name: Build Windows ARM
-        run: GOOS=windows GOARCH=arm64 go build -ldflags="-s -w" -o build/hermes_windows_arm64.exe github.com/c16a/hermes/app
-
-      - name: Store Windows ARM artifacts
-        uses: actions/upload-artifact@v2
-        with:
-          name: hermes_windows_arm64.exe
-          path: build/hermes_windows_arm64.exe
-
   buildMac:
     name: Build macOS
     runs-on: ubuntu-20.04
