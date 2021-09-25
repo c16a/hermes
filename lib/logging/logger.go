@@ -34,7 +34,7 @@ func LogControlPacket(packet *packets.ControlPacket) {
 	}).Debug("Received packet")
 }
 
-func LogOutgoingPacket(packetType packets.PacketType) {
+func LogOutgoingPacket(packetType byte) {
 	logger := GetLogger()
 	logger.WithFields(log.Fields{
 		"type": getPacketType(packetType),
@@ -48,7 +48,7 @@ func LogCustom(msg string, level log.Level) {
 	}).Log(level, msg)
 }
 
-func getPacketType(packetType packets.PacketType) string {
+func getPacketType(packetType byte) string {
 	switch packetType {
 	case packets.CONNECT:
 		return "CONNECT"
