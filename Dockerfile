@@ -1,22 +1,17 @@
-FROM alpine:edge as builder
-
-RUN apk update
-RUN apk upgrade
-RUN apk add --update go gcc g++
+FROM golang:1.17 as builder
 
 WORKDIR /app
 
 ADD go.mod .
+ADD go.sum .
 RUN go mod download
 
 ADD . .
 
-RUN go test -v ./...
-
 ENV CGO_ENABLED=1
 RUN go build -ldflags="-s -w" -o binary github.com/c16a/hermes/app
 
-FROM alpine
+FROM scratch
 WORKDIR /app
 
 ENV CONFIG_FILE_PATH="/var/config.json"

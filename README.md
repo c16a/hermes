@@ -8,6 +8,8 @@ Hermes is a tiny MQTT compatible broker written in Go.
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/c16a/hermes)](https://goreportcard.com/report/github.com/c16a/hermes)
 
+[![Total alerts](https://img.shields.io/lgtm/alerts/g/c16a/hermes.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/c16a/hermes/alerts/)
+
 The goals of the project are as below
 
 - Easy to compile, and run
