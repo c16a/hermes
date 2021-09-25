@@ -1,6 +1,6 @@
 module github.com/c16a/hermes
 
-go 1.15
+go 1.17
 
 require (
 	github.com/dgraph-io/badger/v2 v2.2007.4

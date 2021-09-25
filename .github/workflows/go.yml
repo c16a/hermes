@@ -16,7 +16,7 @@ jobs:
       - name: Set up Go 1.x
         uses: actions/setup-go@v2
         with:
-          go-version: ^1.15
+          go-version: ^1.17
 
       - name: Check out code into the Go module directory
         uses: actions/checkout@v2
@@ -34,7 +34,7 @@ jobs:
       - name: Set up Go 1.x
         uses: actions/setup-go@v2
         with:
-          go-version: ^1.15
+          go-version: ^1.17
 
       - name: Check out code into the Go module directory
         uses: actions/checkout@v2
@@ -80,7 +80,7 @@ jobs:
       - name: Set up Go 1.x
         uses: actions/setup-go@v2
         with:
-          go-version: ^1.15
+          go-version: ^1.17
 
       - name: Check out code into the Go module directory
         uses: actions/checkout@v2
@@ -98,6 +98,15 @@ jobs:
           name: hermes_windows_amd64.exe
           path: build/hermes_windows_amd64.exe
 
+      - name: Build Windows ARM
+        run: GOOS=windows GOARCH=arm64 go build -ldflags="-s -w" -o build/hermes_windows_arm64.exe github.com/c16a/hermes/app
+
+      - name: Store Windows ARM artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: hermes_windows_arm64.exe
+          path: build/hermes_windows_arm64.exe
+
   buildMac:
     name: Build macOS
     runs-on: ubuntu-20.04
@@ -108,7 +117,7 @@ jobs:
       - name: Set up Go 1.x
         uses: actions/setup-go@v2
         with:
-          go-version: ^1.15
+          go-version: ^1.17
 
       - name: Check out code into the Go module directory
         uses: actions/checkout@v2
@@ -125,6 +134,15 @@ jobs:
         with:
           name: hermes_mac_amd64
           path: build/hermes_mac_amd64
+
+      - name: Build macOS Apple Silicon
+        run: GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o build/hermes_mac_arm64 github.com/c16a/hermes/app
+
+      - name: Store macOS Apple Silicon artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: hermes_mac_arm64
+          path: build/hermes_mac_arm64
 
   docker:
     name: Build Image
@@ -154,7 +172,7 @@ jobs:
         with:
           context: .
           file: ./Dockerfile
-          platforms: linux/amd64
+          platforms: linux/amd64,linux/arm64
           username: $GITHUB_ACTOR
           password: ${{ secrets.CR_PAT }}
           push: false
