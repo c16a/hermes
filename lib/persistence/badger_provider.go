@@ -8,6 +8,7 @@ import (
 	"github.com/dgraph-io/badger/v2/options"
 	"github.com/eclipse/paho.golang/packets"
 	uuid "github.com/satori/go.uuid"
+	"go.uber.org/zap"
 	"time"
 )
 
@@ -19,7 +20,7 @@ type BadgerProvider struct {
 	db *badger.DB
 }
 
-func NewBadgerProvider(config *config.Config) (Provider, error) {
+func NewBadgerProvider(config *config.Config, logger *zap.Logger) (Provider, error) {
 	db, err := openDB(config)
 	if err != nil {
 		return nil, err

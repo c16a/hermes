@@ -5,10 +5,11 @@ import (
 	"fmt"
 	"github.com/c16a/hermes/lib/config"
 	"github.com/c16a/hermes/lib/mqtt"
+	"go.uber.org/zap"
 	"net"
 )
 
-func StartTcpServer(serverConfig *config.Config, ctx *mqtt.ServerContext) {
+func StartTcpServer(serverConfig *config.Config, ctx *mqtt.ServerContext, logger *zap.Logger) {
 	var listener net.Listener
 	var listenerErr error
 
@@ -36,7 +37,8 @@ func StartTcpServer(serverConfig *config.Config, ctx *mqtt.ServerContext) {
 	}
 	defer listener.Close()
 
-	fmt.Printf("Starting TCP server on %s\n", tcpAddress)
+	logger.Info(fmt.Sprintf("Starting TCP server on %s", tcpAddress))
+
 	for {
 		conn, err := listener.Accept()
 		if err != nil {

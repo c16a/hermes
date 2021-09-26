@@ -32,10 +32,10 @@ type ServerContext struct {
 func NewServerContext(c *config.Config, logger *zap.Logger) (*ServerContext, error) {
 	authProvider, err := auth.FetchProviderFromConfig(c)
 	if err != nil {
-		fmt.Println("auth provider setup failed:", err)
+		logger.Error("auth provider setup failed", zap.Error(err))
 	}
 
-	var providerSetupFn func(*config.Config) (persistence.Provider, error)
+	var providerSetupFn func(*config.Config, *zap.Logger) (persistence.Provider, error)
 	var persistenceProvider persistence.Provider
 	switch c.Server.Persistence.Type {
 	case "memory":
@@ -45,11 +45,11 @@ func NewServerContext(c *config.Config, logger *zap.Logger) (*ServerContext, err
 	}
 
 	if providerSetupFn == nil {
-		fmt.Println("persistence provider cannot be chosen")
+		logger.Error("persistence provider cannot be chosen")
 	} else {
-		persistenceProvider, err = providerSetupFn(c)
+		persistenceProvider, err = providerSetupFn(c, logger)
 		if err != nil {
-			fmt.Println("persistence provider setup failed:", err)
+			logger.Error("persistence provider setup failed", zap.Error(err))
 		}
 	}
 

@@ -5,11 +5,12 @@ import (
 	"github.com/c16a/hermes/lib/config"
 	"github.com/c16a/hermes/lib/mqtt"
 	"github.com/gorilla/websocket"
+	"go.uber.org/zap"
 	"log"
 	"net/http"
 )
 
-func StartWebSocketServer(serverConfig *config.Config, ctx *mqtt.ServerContext) {
+func StartWebSocketServer(serverConfig *config.Config, ctx *mqtt.ServerContext, logger *zap.Logger) {
 	upgrader := websocket.Upgrader{}
 
 	httpAddr := serverConfig.Server.HttpAddress
@@ -24,6 +25,6 @@ func StartWebSocketServer(serverConfig *config.Config, ctx *mqtt.ServerContext) 
 		go mqtt.HandleMqttConnection(c.UnderlyingConn(), ctx)
 	})
 
-	fmt.Printf("Starting Websocket server on %s\n", httpAddr)
+	logger.Info(fmt.Sprintf("Starting Websocket server on %s", httpAddr))
 	log.Fatal(http.ListenAndServe(httpAddr, nil))
 }

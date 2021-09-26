@@ -1,7 +1,7 @@
 package mqtt
 
 import (
-	"fmt"
+	"errors"
 	"github.com/eclipse/paho.golang/packets"
 	"github.com/eclipse/paho.golang/paho"
 	uuid "github.com/satori/go.uuid"
@@ -25,7 +25,7 @@ func (handler *MqttHandler) Handle(readWriter io.ReadWriter) {
 		zap.String("type", cPacket.PacketType()),
 	).Info("Received packet")
 
-	var packetHandler func(io.ReadWriter, *packets.ControlPacket, MqttBase)
+	var packetHandler func(io.ReadWriter, *packets.ControlPacket, MqttBase) error
 
 	switch cPacket.Type {
 	case packets.CONNECT:
@@ -51,7 +51,10 @@ func (handler *MqttHandler) Handle(readWriter io.ReadWriter) {
 		return
 	}
 
-	packetHandler(readWriter, cPacket, handler.base)
+	err = packetHandler(readWriter, cPacket, handler.base)
+	if err != nil {
+		handler.logger.Error("error handling packet", zap.Error(err))
+	}
 
 	handler.logger.With(
 		zap.Uint16("packetID", cPacket.PacketID()),
@@ -61,10 +64,10 @@ func (handler *MqttHandler) Handle(readWriter io.ReadWriter) {
 	return
 }
 
-func handleConnect(readWriter io.ReadWriter, controlPacket *packets.ControlPacket, base MqttBase) {
+func handleConnect(readWriter io.ReadWriter, controlPacket *packets.ControlPacket, base MqttBase) error {
 	connectPacket, ok := controlPacket.Content.(*packets.Connect)
 	if !ok {
-		return
+		return errors.New("invalid packet")
 	}
 
 	if len(connectPacket.ClientID) == 0 {
@@ -83,60 +86,55 @@ func handleConnect(readWriter io.ReadWriter, controlPacket *packets.ControlPacke
 	}
 
 	_, err := connAckPacket.WriteTo(readWriter)
-	if err != nil {
-		return
-	}
+	return err
 }
 
-func handleDisconnect(readWriter io.ReadWriter, controlPacket *packets.ControlPacket, base MqttBase) {
+func handleDisconnect(readWriter io.ReadWriter, controlPacket *packets.ControlPacket, base MqttBase) error {
 	disconnectPacket, ok := controlPacket.Content.(*packets.Disconnect)
 	if !ok {
-		return
+		return errors.New("invalid packet")
 	}
 
 	base.Disconnect(readWriter, disconnectPacket)
+	return nil
 }
 
-func handlePingRequest(readWriter io.ReadWriter, controlPacket *packets.ControlPacket, base MqttBase) {
+func handlePingRequest(readWriter io.ReadWriter, controlPacket *packets.ControlPacket, base MqttBase) error {
 	_, ok := controlPacket.Content.(*packets.Pingreq)
 	if !ok {
-		return
+		return errors.New("invalid packet")
 	}
 
 	pingResponsePacket := packets.Pingresp{}
 
 	_, err := pingResponsePacket.WriteTo(readWriter)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
+	return err
 }
 
-func handlePublish(readWriter io.ReadWriter, controlPacket *packets.ControlPacket, base MqttBase) {
+func handlePublish(readWriter io.ReadWriter, controlPacket *packets.ControlPacket, base MqttBase) error {
 	publishPacket, ok := controlPacket.Content.(*packets.Publish)
 	if !ok {
-		return
+		return errors.New("invalid packet")
 	}
 
 	switch publishPacket.QoS {
 	case 0:
-		handlePubQos0(publishPacket, base)
-		break
+		return handlePubQos0(publishPacket, base)
 	case 1:
-		handlePubQoS1(readWriter, publishPacket, base)
-		break
+		return handlePubQoS1(readWriter, publishPacket, base)
 	case 2:
-		handlePubQos2(readWriter, publishPacket, base)
+		return handlePubQos2(readWriter, publishPacket, base)
 	}
 
-	return
+	return nil
 }
 
-func handlePubQos0(publishPacket *packets.Publish, base MqttBase) {
+func handlePubQos0(publishPacket *packets.Publish, base MqttBase) error {
 	base.Publish(publishPacket)
+	return nil
 }
 
-func handlePubQoS1(readWriter io.ReadWriter, publishPacket *packets.Publish, base MqttBase) {
+func handlePubQoS1(readWriter io.ReadWriter, publishPacket *packets.Publish, base MqttBase) error {
 	pubAck := packets.Puback{
 		ReasonCode: packets.PubackSuccess,
 		PacketID:   publishPacket.PacketID,
@@ -144,12 +142,13 @@ func handlePubQoS1(readWriter io.ReadWriter, publishPacket *packets.Publish, bas
 
 	_, err := pubAck.WriteTo(readWriter)
 	if err != nil {
-		return
+		return err
 	}
 	base.Publish(publishPacket)
+	return nil
 }
 
-func handlePubQos2(readWriter io.ReadWriter, publishPacket *packets.Publish, base MqttBase) {
+func handlePubQos2(readWriter io.ReadWriter, publishPacket *packets.Publish, base MqttBase) error {
 	pubReceived := packets.Pubrec{
 		ReasonCode: packets.PubrecSuccess,
 		PacketID:   publishPacket.PacketID,
@@ -162,15 +161,16 @@ func handlePubQos2(readWriter io.ReadWriter, publishPacket *packets.Publish, bas
 
 	_, err = pubReceived.WriteTo(readWriter)
 	if err != nil {
-		return
+		return err
 	}
 	base.Publish(publishPacket)
+	return nil
 }
 
-func handlePubRel(readWriter io.ReadWriter, controlPacket *packets.ControlPacket, base MqttBase) {
+func handlePubRel(readWriter io.ReadWriter, controlPacket *packets.ControlPacket, base MqttBase) error {
 	pubRelPacket, ok := controlPacket.Content.(*packets.Pubrel)
 	if !ok {
-		return
+		return errors.New("invalid packet")
 	}
 
 	pubComplete := packets.Pubcomp{
@@ -181,15 +181,13 @@ func handlePubRel(readWriter io.ReadWriter, controlPacket *packets.ControlPacket
 	_ = base.FreePacketID(readWriter, pubRelPacket)
 
 	_, err := pubComplete.WriteTo(readWriter)
-	if err != nil {
-		return
-	}
+	return err
 }
 
-func handleSubscribe(readWriter io.ReadWriter, controlPacket *packets.ControlPacket, base MqttBase) {
+func handleSubscribe(readWriter io.ReadWriter, controlPacket *packets.ControlPacket, base MqttBase) error {
 	subscribePacket, ok := controlPacket.Content.(*packets.Subscribe)
 	if !ok {
-		return
+		return errors.New("invalid packet")
 	}
 
 	subAck := packets.Suback{
@@ -198,16 +196,13 @@ func handleSubscribe(readWriter io.ReadWriter, controlPacket *packets.ControlPac
 	}
 
 	_, err := subAck.WriteTo(readWriter)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
+	return err
 }
 
-func handleUnsubscribe(readWriter io.ReadWriter, controlPacket *packets.ControlPacket, base MqttBase) {
+func handleUnsubscribe(readWriter io.ReadWriter, controlPacket *packets.ControlPacket, base MqttBase) error {
 	unsubscribePacket, ok := controlPacket.Content.(*packets.Unsubscribe)
 	if !ok {
-		return
+		return errors.New("invalid packet")
 	}
 
 	unsubAck := packets.Unsuback{
@@ -216,8 +211,5 @@ func handleUnsubscribe(readWriter io.ReadWriter, controlPacket *packets.ControlP
 	}
 
 	_, err := unsubAck.WriteTo(readWriter)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
+	return err
 }

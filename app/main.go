@@ -28,6 +28,6 @@ func main() {
 		log.Fatal(err)
 	}
 
-	go transports.StartWebSocketServer(serverConfig, ctx)
-	transports.StartTcpServer(serverConfig, ctx)
+	go transports.StartWebSocketServer(serverConfig, ctx, logger)
+	transports.StartTcpServer(serverConfig, ctx, logger)
 }

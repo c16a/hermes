@@ -7,6 +7,7 @@ import (
 	"github.com/c16a/hermes/lib/config"
 	"github.com/eclipse/paho.golang/packets"
 	"github.com/go-redis/redis/v8"
+	"go.uber.org/zap"
 	"time"
 )
 
@@ -14,7 +15,7 @@ type RedisProvider struct {
 	client *redis.Client
 }
 
-func NewRedisProvider(config *config.Config) (Provider, error) {
+func NewRedisProvider(config *config.Config, logger *zap.Logger) (Provider, error) {
 	offlineConfig := config.Server.Persistence.Redis
 
 	rdb := redis.NewClient(&redis.Options{
@@ -25,10 +26,10 @@ func NewRedisProvider(config *config.Config) (Provider, error) {
 
 	err := rdb.Echo(context.Background(), "HELLO").Err()
 	if err != nil {
-		fmt.Println(err)
+		logger.Error("Could not connect to redis persistence provider", zap.Error(err))
 		return nil, err
 	} else {
-		fmt.Println("Connected to redis persistence provider")
+		logger.Info("Connected to redis persistence provider")
 	}
 	return &RedisProvider{client: rdb}, nil
 }
