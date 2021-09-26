@@ -5,11 +5,10 @@ import (
 	"fmt"
 	"github.com/c16a/hermes/lib/auth"
 	"github.com/c16a/hermes/lib/config"
-	"github.com/c16a/hermes/lib/logging"
 	"github.com/c16a/hermes/lib/persistence"
 	"github.com/c16a/hermes/lib/utils"
 	"github.com/eclipse/paho.golang/packets"
-	log "github.com/sirupsen/logrus"
+	"go.uber.org/zap"
 	"io"
 	"math/rand"
 	"sync"
@@ -23,27 +22,44 @@ type ServerContext struct {
 	config              *config.Config
 	authProvider        auth.AuthorisationProvider
 	persistenceProvider persistence.Provider
+
+	logger *zap.Logger
 }
 
 // NewServerContext creates a new server context.
 //
 // This should only be called once per cluster node.
-func NewServerContext(config *config.Config) (*ServerContext, error) {
-	authProvider, err := auth.FetchProviderFromConfig(config)
+func NewServerContext(c *config.Config, logger *zap.Logger) (*ServerContext, error) {
+	authProvider, err := auth.FetchProviderFromConfig(c)
 	if err != nil {
 		fmt.Println("auth provider setup failed:", err)
 	}
 
-	persistenceProvider, err := persistence.NewBadgerProvider(config)
-	if err != nil {
-		fmt.Println("persistence provider setup failed:", err)
+	var providerSetupFn func(*config.Config) (persistence.Provider, error)
+	var persistenceProvider persistence.Provider
+	switch c.Server.Persistence.Type {
+	case "memory":
+		providerSetupFn = persistence.NewBadgerProvider
+	case "redis":
+		providerSetupFn = persistence.NewRedisProvider
 	}
+
+	if providerSetupFn == nil {
+		fmt.Println("persistence provider cannot be chosen")
+	} else {
+		persistenceProvider, err = providerSetupFn(c)
+		if err != nil {
+			fmt.Println("persistence provider setup failed:", err)
+		}
+	}
+
 	return &ServerContext{
 		mu:                  &sync.RWMutex{},
 		connectedClientsMap: make(map[string]*ConnectedClient, 0),
-		config:              config,
+		config:              c,
 		authProvider:        authProvider,
 		persistenceProvider: persistenceProvider,
+		logger:              logger,
 	}, nil
 }
 
@@ -54,10 +70,10 @@ func (ctx *ServerContext) AddClient(conn io.Writer, connect *packets.Connect) (c
 		if authError := ctx.authProvider.Validate(connect.Username, string(connect.Password)); authError != nil {
 			code = 135
 			sessionExists = false
-			logging.LogCustom("auth failed", log.ErrorLevel)
+			ctx.logger.Error("auth failed")
 			return
 		}
-		logging.LogCustom(fmt.Sprintf("auth succeeed for user: %s", connect.Username), log.DebugLevel)
+		ctx.logger.Debug(fmt.Sprintf("auth succeeed for user: %s", connect.Username))
 	}
 
 	clientExists := ctx.checkForClient(connect.ClientID)
@@ -65,14 +81,14 @@ func (ctx *ServerContext) AddClient(conn io.Writer, connect *packets.Connect) (c
 	if clientExists {
 		if clientRequestForFreshSession {
 			// If client asks for fresh session, delete existing ones
-			logging.LogCustom(fmt.Sprintf("Removing old connection for clientID: %s", connect.ClientID), log.DebugLevel)
+			ctx.logger.Debug(fmt.Sprintf("Removing old connection for clientID: %s", connect.ClientID))
 			delete(ctx.connectedClientsMap, connect.ClientID)
 			ctx.doAddClient(conn, connect)
 		} else {
-			logging.LogCustom(fmt.Sprintf("Updating clientID: %s with new connection", connect.ClientID), log.DebugLevel)
+			ctx.logger.Debug(fmt.Sprintf("Updating clientID: %s with new connection", connect.ClientID))
 			ctx.doUpdateClient(connect.ClientID, conn)
 			if ctx.persistenceProvider != nil {
-				logging.LogCustom(fmt.Sprintf("Fetching missed messages for clientID: %s", connect.ClientID), log.DebugLevel)
+				ctx.logger.Debug(fmt.Sprintf("Fetching missed messages for clientID: %s", connect.ClientID))
 				_ = ctx.sendMissedMessages(connect.ClientID, conn)
 			}
 		}
@@ -97,10 +113,10 @@ func (ctx *ServerContext) Disconnect(conn io.Writer, disconnect *packets.Disconn
 	}
 
 	if shouldDelete {
-		logging.LogCustom(fmt.Sprintf("Deleting connection for clientID: %s", clientIdToRemove), log.DebugLevel)
+		ctx.logger.Debug(fmt.Sprintf("Deleting connection for clientID: %s", clientIdToRemove))
 		delete(ctx.connectedClientsMap, clientIdToRemove)
 	} else {
-		logging.LogCustom(fmt.Sprintf("Marking connection as disconnected for clientID: %s", clientIdToRemove), log.DebugLevel)
+		ctx.logger.Debug(fmt.Sprintf("Marking connection as disconnected for clientID: %s", clientIdToRemove))
 		ctx.mu.Lock()
 		ctx.connectedClientsMap[clientIdToRemove].IsConnected = false
 		ctx.mu.Unlock()
@@ -119,7 +135,7 @@ func (ctx *ServerContext) Publish(publish *packets.Publish) {
 					// non-shared subscriptions
 					if !client.IsConnected && !client.IsClean && ctx.persistenceProvider != nil {
 						// save for offline usage
-						logging.LogCustom(fmt.Sprintf("Saving offline delivery message for clientID: %s", client.ClientID), log.DebugLevel)
+						ctx.logger.Debug(fmt.Sprintf("Saving offline delivery message for clientID: %s", client.ClientID))
 						ctx.persistenceProvider.SaveForOfflineDelivery(client.ClientID, publish)
 					}
 					if client.IsConnected {
@@ -271,7 +287,7 @@ func (ctx *ServerContext) doAddClient(conn io.Writer, connect *packets.Connect) 
 		Subscriptions: make(map[string]packets.SubOptions, 0),
 	}
 
-	logging.LogCustom(fmt.Sprintf("Creating new connection for clientID: %s", connect.ClientID), log.DebugLevel)
+	ctx.logger.Debug(fmt.Sprintf("Creating new connection for clientID: %s", connect.ClientID))
 	ctx.mu.Lock()
 	ctx.connectedClientsMap[connect.ClientID] = newClient
 	ctx.mu.Unlock()

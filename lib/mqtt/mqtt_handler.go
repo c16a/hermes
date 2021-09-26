@@ -2,15 +2,16 @@ package mqtt
 
 import (
 	"fmt"
-	"github.com/c16a/hermes/lib/logging"
 	"github.com/eclipse/paho.golang/packets"
 	"github.com/eclipse/paho.golang/paho"
 	uuid "github.com/satori/go.uuid"
+	"go.uber.org/zap"
 	"io"
 )
 
 type MqttHandler struct {
-	base MqttBase
+	base   MqttBase
+	logger *zap.Logger
 }
 
 func (handler *MqttHandler) Handle(readWriter io.ReadWriter) {
@@ -18,7 +19,11 @@ func (handler *MqttHandler) Handle(readWriter io.ReadWriter) {
 	if err != nil {
 		return
 	}
-	logging.LogControlPacket(cPacket)
+
+	handler.logger.With(
+		zap.Uint16("packetID", cPacket.PacketID()),
+		zap.String("type", cPacket.PacketType()),
+	).Info("Received packet")
 
 	var packetHandler func(io.ReadWriter, *packets.ControlPacket, MqttBase)
 
@@ -48,6 +53,11 @@ func (handler *MqttHandler) Handle(readWriter io.ReadWriter) {
 
 	packetHandler(readWriter, cPacket, handler.base)
 
+	handler.logger.With(
+		zap.Uint16("packetID", cPacket.PacketID()),
+		zap.String("type", cPacket.PacketType()),
+	).Info("Writing packet")
+
 	return
 }
 
@@ -72,7 +82,6 @@ func handleConnect(readWriter io.ReadWriter, controlPacket *packets.ControlPacke
 		},
 	}
 
-	logging.LogOutgoingPacket(packets.CONNACK)
 	_, err := connAckPacket.WriteTo(readWriter)
 	if err != nil {
 		return
@@ -96,7 +105,6 @@ func handlePingRequest(readWriter io.ReadWriter, controlPacket *packets.ControlP
 
 	pingResponsePacket := packets.Pingresp{}
 
-	logging.LogOutgoingPacket(packets.PINGRESP)
 	_, err := pingResponsePacket.WriteTo(readWriter)
 	if err != nil {
 		fmt.Println(err)
@@ -134,7 +142,6 @@ func handlePubQoS1(readWriter io.ReadWriter, publishPacket *packets.Publish, bas
 		PacketID:   publishPacket.PacketID,
 	}
 
-	logging.LogOutgoingPacket(packets.PUBACK)
 	_, err := pubAck.WriteTo(readWriter)
 	if err != nil {
 		return
@@ -153,7 +160,6 @@ func handlePubQos2(readWriter io.ReadWriter, publishPacket *packets.Publish, bas
 		pubReceived.ReasonCode = packets.PubrecImplementationSpecificError
 	}
 
-	logging.LogOutgoingPacket(packets.PUBREC)
 	_, err = pubReceived.WriteTo(readWriter)
 	if err != nil {
 		return
@@ -174,7 +180,6 @@ func handlePubRel(readWriter io.ReadWriter, controlPacket *packets.ControlPacket
 
 	_ = base.FreePacketID(readWriter, pubRelPacket)
 
-	logging.LogOutgoingPacket(packets.PUBCOMP)
 	_, err := pubComplete.WriteTo(readWriter)
 	if err != nil {
 		return
@@ -192,7 +197,6 @@ func handleSubscribe(readWriter io.ReadWriter, controlPacket *packets.ControlPac
 		Reasons:  base.Subscribe(readWriter, subscribePacket),
 	}
 
-	logging.LogOutgoingPacket(packets.SUBACK)
 	_, err := subAck.WriteTo(readWriter)
 	if err != nil {
 		fmt.Println(err)
@@ -211,7 +215,6 @@ func handleUnsubscribe(readWriter io.ReadWriter, controlPacket *packets.ControlP
 		Reasons:  base.Unsubscribe(readWriter, unsubscribePacket),
 	}
 
-	logging.LogOutgoingPacket(packets.UNSUBACK)
 	_, err := unsubAck.WriteTo(readWriter)
 	if err != nil {
 		fmt.Println(err)

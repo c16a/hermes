@@ -7,12 +7,12 @@ type Config struct {
 
 // Server stores all server related configuration
 type Server struct {
-	Tls         *Tls     `json:"tls" yaml:"tls"`
-	TcpAddress  string   `json:"tcp,omitempty" yaml:"tcp,omitempty"`
-	HttpAddress string   `json:"http,omitempty" yaml:"http,omitempty"`
-	MaxQos      byte     `json:"max_qos,omitempty" yaml:"max_qos,omitempty"`
-	Auth        *Auth    `json:"auth,omitempty" yaml:"auth,omitempty"`
-	Offline     *Offline `json:"offline,omitempty"`
+	Tls         *Tls         `json:"tls" yaml:"tls"`
+	TcpAddress  string       `json:"tcp,omitempty" yaml:"tcp,omitempty"`
+	HttpAddress string       `json:"http,omitempty" yaml:"http,omitempty"`
+	MaxQos      byte         `json:"max_qos,omitempty" yaml:"max_qos,omitempty"`
+	Auth        *Auth        `json:"auth,omitempty" yaml:"auth,omitempty"`
+	Persistence *Persistence `json:"persistence,omitempty" yaml:"persistence,omitempty"`
 }
 
 // Tls stores the TLS config for the server
@@ -28,8 +28,20 @@ type Auth struct {
 	LdapDn   string `json:"ldap_dn,omitempty" yaml:"ldap_dn,omitempty"`
 }
 
-type Offline struct {
+type Badger struct {
 	Path         string `json:"path,omitempty"`
 	MaxTableSize int64  `json:"max_table_size,omitempty"`
 	NumTables    int    `json:"num_tables,omitempty"`
+}
+
+type Redis struct {
+	Url      string `json:"url" yaml:"url"`
+	Password string `json:"password" yaml:"password"`
+}
+
+type Persistence struct {
+	Type string `json:"type" yaml:"type"`
+
+	Badger *Badger `json:"badger" yaml:"badger"`
+	Redis  *Redis  `json:"redis" yaml:"redis"`
 }

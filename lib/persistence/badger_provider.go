@@ -1,8 +1,6 @@
 package persistence
 
 import (
-	"bytes"
-	"encoding/gob"
 	"errors"
 	"fmt"
 	"github.com/c16a/hermes/lib/config"
@@ -21,7 +19,7 @@ type BadgerProvider struct {
 	db *badger.DB
 }
 
-func NewBadgerProvider(config *config.Config) (*BadgerProvider, error) {
+func NewBadgerProvider(config *config.Config) (Provider, error) {
 	db, err := openDB(config)
 	if err != nil {
 		return nil, err
@@ -30,7 +28,7 @@ func NewBadgerProvider(config *config.Config) (*BadgerProvider, error) {
 }
 
 func openDB(config *config.Config) (*badger.DB, error) {
-	offlineConfig := config.Server.Offline
+	offlineConfig := config.Server.Persistence.Badger
 
 	var opts badger.Options
 	if offlineConfig == nil {
@@ -136,23 +134,4 @@ func (b *BadgerProvider) CheckForPacketIdReuse(clientID string, packetID uint16)
 		})
 	})
 	return reuseFlag, err
-}
-
-func getBytes(bundle interface{}) ([]byte, error) {
-	var buf bytes.Buffer
-	enc := gob.NewEncoder(&buf)
-	err := enc.Encode(bundle)
-	if err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
-}
-
-func getPublishPacket(src []byte) (*packets.Publish, error) {
-	buf := bytes.NewBuffer(src)
-	decoder := gob.NewDecoder(buf)
-
-	var publish packets.Publish
-	err := decoder.Decode(&publish)
-	return &publish, err
 }

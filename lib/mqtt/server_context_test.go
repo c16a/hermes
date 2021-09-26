@@ -6,6 +6,7 @@ import (
 	"github.com/c16a/hermes/lib/config"
 	"github.com/c16a/hermes/lib/persistence"
 	"github.com/eclipse/paho.golang/packets"
+	"go.uber.org/zap"
 	"io"
 	"io/ioutil"
 	"reflect"
@@ -25,9 +26,10 @@ func TestNewServerContext(t *testing.T) {
 	}{
 		// TODO: Add test cases.
 	}
+	logger := zap.NewNop()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := NewServerContext(tt.args.config)
+			got, err := NewServerContext(tt.args.config, logger)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("NewServerContext() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -203,6 +205,7 @@ func TestServerContext_AddClient(t *testing.T) {
 				config:              tt.fields.config,
 				authProvider:        tt.fields.authProvider,
 				persistenceProvider: tt.fields.persistenceProvider,
+				logger:              zap.NewNop(),
 			}
 			gotCode, gotSessionExists, gotMaxQos := ctx.AddClient(tt.args.conn, tt.args.connect)
 			if gotCode != tt.wantCode {
@@ -284,6 +287,7 @@ func TestServerContext_Disconnect(t *testing.T) {
 				config:              tt.fields.config,
 				authProvider:        tt.fields.authProvider,
 				persistenceProvider: tt.fields.persistenceProvider,
+				logger:              zap.NewNop(),
 			}
 			ctx.Disconnect(tt.args.conn, tt.args.disconnect)
 		})
@@ -392,6 +396,7 @@ func TestServerContext_Publish(t *testing.T) {
 				config:              tt.fields.config,
 				authProvider:        tt.fields.authProvider,
 				persistenceProvider: tt.fields.persistenceProvider,
+				logger:              zap.NewNop(),
 			}
 			ctx.Publish(tt.args.publish)
 		})
@@ -557,6 +562,7 @@ func TestServerContext_Subscribe(t *testing.T) {
 				config:              tt.fields.config,
 				authProvider:        tt.fields.authProvider,
 				persistenceProvider: tt.fields.persistenceProvider,
+				logger:              zap.NewNop(),
 			}
 			if got := ctx.Subscribe(tt.args.conn, tt.args.subscribe); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("Subscribe() = %v, want %v", got, tt.want)
@@ -627,6 +633,7 @@ func TestServerContext_Unsubscribe(t *testing.T) {
 				config:              tt.fields.config,
 				authProvider:        tt.fields.authProvider,
 				persistenceProvider: tt.fields.persistenceProvider,
+				logger:              zap.NewNop(),
 			}
 			if got := ctx.Unsubscribe(tt.args.conn, tt.args.unsubscribe); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("Unsubscribe() = %v, want %v", got, tt.want)
