@@ -1,4 +1,4 @@
-FROM golang:1.17 as builder
+FROM docker.io/golang:1.17 as builder
 
 WORKDIR /app
 
@@ -8,7 +8,7 @@ RUN go mod download
 
 ADD . .
 
-ENV CGO_ENABLED=1
+ENV CGO_ENABLED=0
 RUN go build -ldflags="-s -w" -o binary github.com/c16a/hermes/app
 
 FROM scratch
