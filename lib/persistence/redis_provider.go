@@ -37,7 +37,12 @@ func NewRedisProvider(config *config.Config, logger *zap.Logger) (Provider, erro
 func (r *RedisProvider) SaveForOfflineDelivery(clientId string, publish *packets.Publish) error {
 	_, err := r.client.TxPipelined(context.Background(), func(pipeliner redis.Pipeliner) error {
 		key := fmt.Sprintf("urn:messages:%s", clientId)
-		pipeliner.LPush(context.Background(), key, publish)
+
+		publishBytes, err := getBytes(publish)
+		if err != nil {
+			return err
+		}
+		pipeliner.LPush(context.Background(), key, publishBytes)
 
 		// Set expiry
 		if publish.Properties != nil && publish.Properties.MessageExpiry != nil {
@@ -50,23 +55,30 @@ func (r *RedisProvider) SaveForOfflineDelivery(clientId string, publish *packets
 
 func (r *RedisProvider) GetMissedMessages(clientId string) ([]*packets.Publish, error) {
 	publishPackets := make([]*packets.Publish, 0)
-	_, err := r.client.TxPipelined(context.Background(), func(pipeliner redis.Pipeliner) error {
-		key := fmt.Sprintf("urn:messages:%s", clientId)
-		payloads, err := pipeliner.LRange(context.Background(), key, 0, -1).Result()
+	key := fmt.Sprintf("urn:messages:%s", clientId)
+
+	// Get the length of the list
+	length, err := r.client.LLen(context.Background(), key).Result()
+	if err != nil {
+		return nil, err
+	}
+
+	// Pop everything in the list
+	payloads, err := r.client.LPopCount(context.Background(), key, int(length)).Result()
+	if err != nil {
+		return nil, err
+	}
+
+	for _, payload := range payloads {
+		payloadBytes := []byte(payload)
+		publishPacket, err := getPublishPacket(payloadBytes)
 		if err != nil {
-			return err
+			continue
 		}
-		for _, payload := range payloads {
-			payloadBytes := []byte(payload)
-			publishPacket, err := getPublishPacket(payloadBytes)
-			if err != nil {
-				continue
-			}
-			publishPackets = append(publishPackets, publishPacket)
-		}
-		return nil
-	})
+		publishPackets = append(publishPackets, publishPacket)
+	}
 	return publishPackets, err
+
 }
 
 func (r *RedisProvider) ReservePacketID(clientID string, packetID uint16) error {

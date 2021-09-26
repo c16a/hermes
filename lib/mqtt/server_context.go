@@ -73,7 +73,7 @@ func (ctx *ServerContext) AddClient(conn io.Writer, connect *packets.Connect) (c
 			ctx.logger.Error("auth failed")
 			return
 		}
-		ctx.logger.Debug(fmt.Sprintf("auth succeeed for user: %s", connect.Username))
+		ctx.logger.Info(fmt.Sprintf("auth succeeed for user: %s", connect.Username))
 	}
 
 	clientExists := ctx.checkForClient(connect.ClientID)
@@ -81,15 +81,18 @@ func (ctx *ServerContext) AddClient(conn io.Writer, connect *packets.Connect) (c
 	if clientExists {
 		if clientRequestForFreshSession {
 			// If client asks for fresh session, delete existing ones
-			ctx.logger.Debug(fmt.Sprintf("Removing old connection for clientID: %s", connect.ClientID))
+			ctx.logger.Info(fmt.Sprintf("Removing old connection for clientID: %s", connect.ClientID))
 			delete(ctx.connectedClientsMap, connect.ClientID)
 			ctx.doAddClient(conn, connect)
 		} else {
-			ctx.logger.Debug(fmt.Sprintf("Updating clientID: %s with new connection", connect.ClientID))
+			ctx.logger.Info(fmt.Sprintf("Updating clientID: %s with new connection", connect.ClientID))
 			ctx.doUpdateClient(connect.ClientID, conn)
 			if ctx.persistenceProvider != nil {
-				ctx.logger.Debug(fmt.Sprintf("Fetching missed messages for clientID: %s", connect.ClientID))
-				_ = ctx.sendMissedMessages(connect.ClientID, conn)
+				ctx.logger.Info(fmt.Sprintf("Fetching missed messages for clientID: %s", connect.ClientID))
+				err := ctx.sendMissedMessages(connect.ClientID, conn)
+				if err != nil {
+					ctx.logger.Error("failed to fetch offline messages", zap.Error(err))
+				}
 			}
 		}
 	} else {
@@ -113,10 +116,10 @@ func (ctx *ServerContext) Disconnect(conn io.Writer, disconnect *packets.Disconn
 	}
 
 	if shouldDelete {
-		ctx.logger.Debug(fmt.Sprintf("Deleting connection for clientID: %s", clientIdToRemove))
+		ctx.logger.Info(fmt.Sprintf("Deleting connection for clientID: %s", clientIdToRemove))
 		delete(ctx.connectedClientsMap, clientIdToRemove)
 	} else {
-		ctx.logger.Debug(fmt.Sprintf("Marking connection as disconnected for clientID: %s", clientIdToRemove))
+		ctx.logger.Info(fmt.Sprintf("Marking connection as disconnected for clientID: %s", clientIdToRemove))
 		ctx.mu.Lock()
 		ctx.connectedClientsMap[clientIdToRemove].IsConnected = false
 		ctx.mu.Unlock()
@@ -135,8 +138,11 @@ func (ctx *ServerContext) Publish(publish *packets.Publish) {
 					// non-shared subscriptions
 					if !client.IsConnected && !client.IsClean && ctx.persistenceProvider != nil {
 						// save for offline usage
-						ctx.logger.Debug(fmt.Sprintf("Saving offline delivery message for clientID: %s", client.ClientID))
-						ctx.persistenceProvider.SaveForOfflineDelivery(client.ClientID, publish)
+						ctx.logger.Info(fmt.Sprintf("Saving offline delivery message for clientID: %s", client.ClientID))
+						err := ctx.persistenceProvider.SaveForOfflineDelivery(client.ClientID, publish)
+						if err != nil {
+							ctx.logger.Error("failed to save offline message", zap.Error(err))
+						}
 					}
 					if client.IsConnected {
 						// send direct message
@@ -273,7 +279,11 @@ func (ctx *ServerContext) sendMissedMessages(clientId string, conn io.Writer) er
 	}
 
 	for _, msg := range missedMessages {
-		msg.WriteTo(conn)
+		if _, writeErr := msg.WriteTo(conn); writeErr != nil {
+			if ctx.persistenceProvider.SaveForOfflineDelivery(clientId, msg) != nil {
+				ctx.logger.Error("failed to save offline message", zap.Error(err))
+			}
+		}
 	}
 	return nil
 }
@@ -287,7 +297,7 @@ func (ctx *ServerContext) doAddClient(conn io.Writer, connect *packets.Connect) 
 		Subscriptions: make(map[string]packets.SubOptions, 0),
 	}
 
-	ctx.logger.Debug(fmt.Sprintf("Creating new connection for clientID: %s", connect.ClientID))
+	ctx.logger.Info(fmt.Sprintf("Creating new connection for clientID: %s", connect.ClientID))
 	ctx.mu.Lock()
 	ctx.connectedClientsMap[connect.ClientID] = newClient
 	ctx.mu.Unlock()

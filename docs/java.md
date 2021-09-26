@@ -48,7 +48,12 @@ repositories {
 ```java
 var persistence = new MemoryPersistence();
 var client = new MqttClient(broker, clientID, persistence);
+
 var connOpts = new MqttConnectionOptions();
+// Setting clean start to "false" enables the client 
+// to receive offline messages send while it was disconnected.
+connOpts.setCleanStart(false);
+
 client.connect(connOpts);
 ```
 
@@ -71,11 +76,19 @@ client.setCallback(new MqttCallback(){
     public void messageArrived(String topic, MqttMessage message) throws Exception{
         // Do something awesome
     }
+    
+    // other implemented methods
 });
 client.connect(connOpts);
 
 // Provide a topic and Quality of Service (QoS)
 client.subscribe("my-topic", 0);
+```
+
+### Closing the connection
+
+```java
+client.disconnect();
 ```
 
 ## Spring Integration
