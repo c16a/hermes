@@ -7,7 +7,7 @@ require (
 	github.com/eclipse/paho.golang v0.10.0
 	github.com/go-ldap/ldap/v3 v3.4.1
 	github.com/go-redis/redis/v8 v8.11.3
-	github.com/gorilla/websocket v1.4.2
+	github.com/gorilla/websocket v1.5.0
 	github.com/satori/go.uuid v1.2.0
 	go.uber.org/zap v1.19.1
 )
