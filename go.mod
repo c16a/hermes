@@ -6,7 +6,7 @@ require (
 	github.com/dgraph-io/badger/v2 v2.2007.4
 	github.com/eclipse/paho.golang v0.10.0
 	github.com/go-ldap/ldap/v3 v3.4.1
-	github.com/go-redis/redis/v8 v8.11.3
+	github.com/go-redis/redis/v8 v8.11.5
 	github.com/gorilla/websocket v1.4.2
 	github.com/satori/go.uuid v1.2.0
 	go.uber.org/zap v1.19.1
@@ -15,7 +15,7 @@ require (
 require (
 	github.com/Azure/go-ntlmssp v0.0.0-20200615164410-66371956d46c // indirect
 	github.com/cespare/xxhash v1.1.0 // indirect
-	github.com/cespare/xxhash/v2 v2.1.1 // indirect
+	github.com/cespare/xxhash/v2 v2.1.2 // indirect
 	github.com/dgraph-io/ristretto v0.0.3-0.20200630154024-f66de99634de // indirect
 	github.com/dgryski/go-farm v0.0.0-20190423205320-6a90982ecee2 // indirect
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
@@ -30,6 +30,6 @@ require (
 	golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9 // indirect
 	golang.org/x/net v0.0.0-20210428140749-89ef3d95e781 // indirect
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c // indirect
-	golang.org/x/sys v0.0.0-20210510120138-977fb7262007 // indirect
+	golang.org/x/sys v0.0.0-20211216021012-1d35b9e2eb4e // indirect
 	google.golang.org/protobuf v1.26.0 // indirect
 )
