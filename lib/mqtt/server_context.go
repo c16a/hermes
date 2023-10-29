@@ -3,16 +3,17 @@ package mqtt
 import (
 	"errors"
 	"fmt"
+	"io"
+	"math/rand"
+	"sync"
+	"time"
+
 	"github.com/c16a/hermes/lib/auth"
 	"github.com/c16a/hermes/lib/config"
 	"github.com/c16a/hermes/lib/persistence"
 	"github.com/c16a/hermes/lib/utils"
 	"github.com/eclipse/paho.golang/packets"
 	"go.uber.org/zap"
-	"io"
-	"math/rand"
-	"sync"
-	"time"
 )
 
 // ServerContext stores the state of the cluster node
@@ -131,7 +132,7 @@ func (ctx *ServerContext) Publish(publish *packets.Publish) {
 	var shareNameClientMap = make(map[string][]*ConnectedClient, 0)
 	for _, client := range ctx.connectedClientsMap {
 		topicToTarget := publish.Topic
-		for topicFilter, _ := range client.Subscriptions {
+		for topicFilter := range client.Subscriptions {
 			matches, isShared, shareName := utils.TopicMatches(topicToTarget, topicFilter)
 			if matches {
 				if !isShared {
@@ -160,13 +161,6 @@ func (ctx *ServerContext) Publish(publish *packets.Publish) {
 	}
 
 	for _, clients := range shareNameClientMap {
-		onlineClients := make([]*ConnectedClient, 0)
-		for _, c := range clients {
-			if c.IsConnected {
-				onlineClients = append(onlineClients, c)
-			}
-		}
-
 		var client *ConnectedClient
 		if len(clients) == 1 {
 			client = clients[0]
@@ -188,8 +182,8 @@ func (ctx *ServerContext) Subscribe(conn io.Writer, subscribe *packets.Subscribe
 	var subAckBytes []byte
 	for _, client := range ctx.connectedClientsMap {
 		if conn == client.Connection {
-			for topic, options := range subscribe.Subscriptions {
-				client.Subscriptions[topic] = options
+			for _, options := range subscribe.Subscriptions {
+				client.Subscriptions[options.Topic] = options
 				var subAckByte byte
 
 				if options.QoS > ctx.config.Server.MaxQos {
@@ -198,13 +192,10 @@ func (ctx *ServerContext) Subscribe(conn io.Writer, subscribe *packets.Subscribe
 					switch options.QoS {
 					case 0:
 						subAckByte = packets.SubackGrantedQoS0
-						break
 					case 1:
 						subAckByte = packets.SubackGrantedQoS1
-						break
 					case 2:
 						subAckByte = packets.SubackGrantedQoS2
-						break
 					default:
 						subAckByte = packets.SubackUnspecifiederror
 					}

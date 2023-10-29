@@ -2,16 +2,17 @@ package mqtt
 
 import (
 	"errors"
-	"github.com/c16a/hermes/lib/auth"
-	"github.com/c16a/hermes/lib/config"
-	"github.com/c16a/hermes/lib/persistence"
-	"github.com/eclipse/paho.golang/packets"
-	"go.uber.org/zap"
 	"io"
 	"io/ioutil"
 	"reflect"
 	"sync"
 	"testing"
+
+	"github.com/c16a/hermes/lib/auth"
+	"github.com/c16a/hermes/lib/config"
+	"github.com/c16a/hermes/lib/persistence"
+	"github.com/eclipse/paho.golang/packets"
+	"go.uber.org/zap"
 )
 
 func TestNewServerContext(t *testing.T) {
@@ -445,9 +446,10 @@ func TestServerContext_Subscribe(t *testing.T) {
 			args{
 				ioutil.Discard,
 				&packets.Subscribe{
-					Subscriptions: map[string]packets.SubOptions{
-						"foo": {
-							QoS: 0,
+					Subscriptions: []packets.SubOptions{
+						{
+							Topic: "foo",
+							QoS:   0,
 						},
 					},
 				},
@@ -478,9 +480,10 @@ func TestServerContext_Subscribe(t *testing.T) {
 			args{
 				ioutil.Discard,
 				&packets.Subscribe{
-					Subscriptions: map[string]packets.SubOptions{
-						"foo": {
-							QoS: 1,
+					Subscriptions: []packets.SubOptions{
+						{
+							Topic: "foo",
+							QoS:   1,
 						},
 					},
 				},
@@ -511,9 +514,10 @@ func TestServerContext_Subscribe(t *testing.T) {
 			args{
 				ioutil.Discard,
 				&packets.Subscribe{
-					Subscriptions: map[string]packets.SubOptions{
-						"foo": {
-							QoS: 2,
+					Subscriptions: []packets.SubOptions{
+						{
+							Topic: "foo",
+							QoS:   2,
 						},
 					},
 				},
@@ -544,9 +548,10 @@ func TestServerContext_Subscribe(t *testing.T) {
 			args{
 				ioutil.Discard,
 				&packets.Subscribe{
-					Subscriptions: map[string]packets.SubOptions{
-						"foo": {
-							QoS: 2,
+					Subscriptions: []packets.SubOptions{
+						{
+							Topic: "foo",
+							QoS:   2,
 						},
 					},
 				},

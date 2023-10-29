@@ -2,11 +2,12 @@ package mqtt
 
 import (
 	"errors"
+	"io"
+
 	"github.com/eclipse/paho.golang/packets"
 	"github.com/eclipse/paho.golang/paho"
 	uuid "github.com/satori/go.uuid"
 	"go.uber.org/zap"
-	"io"
 )
 
 type MqttHandler struct {
@@ -30,21 +31,16 @@ func (handler *MqttHandler) Handle(readWriter io.ReadWriter) {
 	switch cPacket.Type {
 	case packets.CONNECT:
 		packetHandler = handleConnect
-		break
 	case packets.PUBLISH:
 		packetHandler = handlePublish
-		break
 	case packets.PUBREL:
 		packetHandler = handlePubRel
 	case packets.SUBSCRIBE:
 		packetHandler = handleSubscribe
-		break
 	case packets.UNSUBSCRIBE:
 		packetHandler = handleUnsubscribe
-		break
 	case packets.DISCONNECT:
 		packetHandler = handleDisconnect
-		break
 	case packets.PINGREQ:
 		packetHandler = handlePingRequest
 	default:
@@ -60,8 +56,6 @@ func (handler *MqttHandler) Handle(readWriter io.ReadWriter) {
 		zap.Uint16("packetID", cPacket.PacketID()),
 		zap.String("type", cPacket.PacketType()),
 	).Info("Writing packet")
-
-	return
 }
 
 func handleConnect(readWriter io.ReadWriter, controlPacket *packets.ControlPacket, base MqttBase) error {
